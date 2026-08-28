@@ -6,9 +6,15 @@ using MiniSign.Services;
 
 namespace MiniSign.Controllers;
 
-public class HomeController(ISignService svc) : Controller
+public class HomeController : Controller
 {
-    public async Task<IActionResult> Index() { ViewBag.Dash = await svc.DashboardAsync(); return View(); }
+    // SPA React ở "/". Trang xác thực công khai /Verify (Razor) giữ nguyên.
+    public IActionResult Index() => Redirect("/index.html");
+}
+
+public class LegacyController(ISignService svc) : Controller
+{
+    public async Task<IActionResult> Index() { ViewBag.Dash = await svc.DashboardAsync(); return View("~/Views/Home/Index.cshtml"); }
 }
 
 public class CertController(ISignService svc) : Controller
