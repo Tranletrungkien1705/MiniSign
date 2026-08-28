@@ -1,0 +1,44 @@
+@{ ViewData["Title"] = "Xác minh chữ ký"; var r = ViewBag.Result as VerifyResult; }
+<div class="row g-3">
+    <div class="col-lg-7"><div class="card"><div class="card-body">
+        <form asp-action="Do" method="post">@Html.AntiForgeryToken()
+            <div class="mb-2"><label class="form-label small text-muted">Serial chứng thư *</label><input name="serial" value="@ViewBag.Serial" class="form-control mono" placeholder="VD 54c0ffee1234abcd5678" required /></div>
+            <div class="mb-2"><label class="form-label small text-muted">Nội dung gốc</label><textarea name="content" class="form-control mono" rows="6">@ViewBag.Content</textarea></div>
+            <div class="mb-3"><label class="form-label small text-muted">Chữ ký (base64)</label><textarea name="signature" class="form-control mono" rows="4">@ViewBag.Signature</textarea></div>
+            <button class="btn btn-primary"><i class="bi bi-shield-check me-1"></i>Xác minh</button>
+        </form>
+    </div></div></div>
+    <div class="col-lg-5">
+        @if (r != null)
+        {
+            <div class="card"><div class="card-body text-center">
+                @if (r.valid)
+                {
+                    <i class="bi bi-shield-fill-check" style="font-size:48px;color:#16a34a"></i>
+                    <h5 class="fw-bold text-success mt-2">CHỮ KÝ HỢP LỆ</h5>
+                }
+                else
+                {
+                    <i class="bi bi-shield-fill-x" style="font-size:48px;color:#dc2626"></i>
+                    <h5 class="fw-bold text-danger mt-2">KHÔNG HỢP LỆ</h5>
+                }
+                <p class="small text-muted">@r.msg</p>
+                @if (r.subject != null)
+                {
+                    <hr /><div class="text-start small">
+                        <div>Chủ thể: <b>@r.subject</b></div>
+                        <div>Serial: <span class="mono">@r.serial</span></div>
+                        @if (r.signedAt != null) { <div>Ký lúc: @r.signedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div> }
+                    </div>
+                }
+            </div></div>
+        }
+        else
+        {
+            <div class="card"><div class="card-body">
+                <h6 class="fw-bold mb-2">Xác minh toàn vẹn</h6>
+                <p class="small text-muted mb-0">Nhập serial + nội dung gốc + chữ ký. Hệ thống dùng khóa công khai của chứng thư để kiểm tra. Chỉ cần lệch 1 ký tự nội dung, kết quả sẽ là <b>KHÔNG hợp lệ</b>.</p>
+            </div></div>
+        }
+    </div>
+</div>

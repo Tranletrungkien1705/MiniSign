@@ -1,0 +1,34 @@
+@{ ViewData["Title"] = "Ký tài liệu"; var certs = (List<Certificate>)ViewBag.Certs; var r = ViewBag.Result as SignResult; }
+<div class="row g-3">
+    <div class="col-lg-7"><div class="card"><div class="card-body">
+        <form asp-action="Do" method="post">@Html.AntiForgeryToken()
+            <div class="mb-2"><label class="form-label small text-muted">Chứng thư ký *</label>
+                <select name="certId" class="form-select" required>
+                    <option value="">— Chọn chứng thư —</option>
+                    @foreach (var c in certs) { <option value="@c.Id" selected="@(ViewBag.CertId?.ToString()==c.Id.ToString())">@c.Subject (@c.Serial)@(c.IsUsable ? "" : " — không hiệu lực")</option> }
+                </select></div>
+            <div class="mb-2"><label class="form-label small text-muted">Tên tài liệu</label><input name="docName" value="@ViewBag.DocName" class="form-control" placeholder="VD HoaDon_001.xml" /></div>
+            <div class="mb-3"><label class="form-label small text-muted">Nội dung cần ký</label><textarea name="content" class="form-control mono" rows="7" placeholder="Dán nội dung / XML hóa đơn...">@ViewBag.Content</textarea></div>
+            <button class="btn btn-primary"><i class="bi bi-pen me-1"></i>Ký số</button>
+        </form>
+        @if (r != null && r.ok)
+        {
+            <hr />
+            <div class="alert alert-success py-2 small mb-2"><i class="bi bi-check-circle me-1"></i>@r.msg (@r.algo)</div>
+            <label class="form-label small text-muted mb-1">SHA256</label>
+            <div class="border rounded p-2 mono small mb-2">@r.hash</div>
+            <label class="form-label small text-muted mb-1">Chữ ký (base64) — serial @r.serial</label>
+            <div class="border rounded p-2 mono small" style="max-height:150px;overflow:auto">@r.signature</div>
+        }
+    </div></div></div>
+    <div class="col-lg-5"><div class="card"><div class="card-body">
+        <h6 class="fw-bold mb-2">Cách hoạt động</h6>
+        <ol class="small text-muted ps-3">
+            <li>Băm nội dung bằng <b>SHA256</b></li>
+            <li>Ký hash bằng <b>khóa riêng RSA</b> (PKCS#1)</li>
+            <li>Bên nhận verify bằng <b>khóa công khai</b> + serial</li>
+        </ol>
+        <div class="small text-muted">Đổi 1 ký tự nội dung → chữ ký sẽ <b>không hợp lệ</b> (đảm bảo toàn vẹn).</div>
+        <a href="/Verify" class="btn btn-outline-primary w-100 mt-2">Sang trang xác minh</a>
+    </div></div></div>
+</div>

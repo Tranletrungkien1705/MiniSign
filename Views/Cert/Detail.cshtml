@@ -1,0 +1,26 @@
+@model Certificate
+@{ ViewData["Title"] = $"CTS {Model.Subject}"; var logs = (List<SignLog>)ViewBag.Logs; var (t, css) = Ui.Cert(Model); }
+<div class="card mb-3"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-start">
+        <div><h5 class="fw-bold mb-1"><i class="bi bi-award me-1"></i>@Model.Subject <span class="badge bg-@css ms-1">@t</span></h5>
+            <div class="text-muted small">Serial <span class="mono">@Model.Serial</span> · @Model.Algorithm</div>
+            <div class="text-muted small">Hiệu lực @Model.NotBefore.ToString("dd/MM/yyyy") – @Model.NotAfter.ToString("dd/MM/yyyy")</div></div>
+    </div>
+    <hr />
+    <label class="form-label small text-muted mb-1">Khóa công khai (PEM) — dùng để xác minh</label>
+    <pre class="mono small border rounded p-2 mb-0" style="max-height:180px;overflow:auto;white-space:pre-wrap">@Model.PublicKeyPem</pre>
+</div></div>
+<div class="card"><div class="card-body">
+    <h6 class="fw-bold mb-2">Lượt ký bằng chứng thư này</h6>
+    <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Tài liệu</th><th>SHA256</th><th>Thời gian</th></tr></thead>
+        <tbody>
+        @foreach (var l in logs)
+        {
+            <tr><td class="small">@l.DocName</td><td class="small mono">@(l.Hash.Length > 24 ? l.Hash[..24] + "…" : l.Hash)</td><td class="small text-muted">@l.CreatedAt.ToLocalTime().ToString("dd/MM HH:mm")</td></tr>
+        }
+        @if (logs.Count == 0) { <tr><td colspan="3" class="text-muted small py-2">Chưa có.</td></tr> }
+        </tbody>
+    </table>
+    <a href="/Cert" class="btn btn-outline-secondary btn-sm mt-2">← Danh sách</a>
+</div></div>

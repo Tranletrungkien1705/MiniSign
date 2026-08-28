@@ -1,0 +1,63 @@
+@{
+    string Nav(string c) => (ViewContext.RouteData.Values["controller"]?.ToString() == c) ? "active" : "";
+}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] — MiniSign</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+        :root { --accent:#b45309; --accent2:#92400e; --sidebar:#211505; }
+        body { font-size:14px; background:#faf6ef; font-family:"Be Vietnam Pro",sans-serif; -webkit-font-smoothing:antialiased; }
+        .sidebar { width:238px; min-height:100vh; background:var(--sidebar); flex-shrink:0; }
+        .sidebar .brand { color:#fff; font-weight:800; font-size:18px; padding:20px 18px 12px; display:flex; align-items:center; gap:9px; }
+        .sidebar .brand span { color:#fcd34d; }
+        .sidebar .nav-link { color:#a89372; padding:9px 18px; display:flex; align-items:center; gap:10px; font-size:14px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color:#fff; background:rgba(180,83,9,.34); border-left:3px solid var(--accent); }
+        .sidebar .nav-section { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:#5c4a2a; padding:14px 18px 4px; }
+        .topbar { background:#fff; border-bottom:1px solid #efe4d2; padding:11px 24px; }
+        .content-area { padding:24px; }
+        .card { border:none; box-shadow:0 1px 4px rgba(40,25,2,.07); border-radius:13px; }
+        .btn-primary { background:var(--accent); border-color:var(--accent); } .btn-primary:hover { background:var(--accent2); border-color:var(--accent2); }
+        .btn-outline-primary { color:var(--accent); border-color:var(--accent); } .btn-outline-primary:hover { background:var(--accent); color:#fff; }
+        a { color:var(--accent2); }
+        table th { font-size:11.5px; text-transform:uppercase; letter-spacing:.4px; color:#6b7280; border-bottom:2px solid #e5e7eb; }
+        .stat-num { font-size:25px; font-weight:800; }
+        code, .mono { font-family:ui-monospace,Menlo,Consolas,monospace; word-break:break-all; }
+    </style>
+</head>
+<body>
+<div class="d-flex">
+    <nav class="sidebar d-flex flex-column">
+        <div class="brand"><i class="bi bi-patch-check-fill"></i> Mini<span>Sign</span></div>
+        <div class="mt-1">
+            <div class="nav-section">Tổng quan</div>
+            <a class="nav-link @(Nav("Home"))" href="/"><i class="bi bi-speedometer2"></i> Bảng điều khiển</a>
+            <div class="nav-section">Ký số</div>
+            <a class="nav-link @(Nav("Cert"))" href="/Cert"><i class="bi bi-award"></i> Chứng thư số</a>
+            <a class="nav-link @(Nav("Sign"))" href="/Sign"><i class="bi bi-pen"></i> Ký tài liệu</a>
+            <a class="nav-link @(Nav("Verify"))" href="/Verify"><i class="bi bi-shield-check"></i> Xác minh chữ ký</a>
+            <div class="nav-section">Hệ thống</div>
+            <a class="nav-link @(Nav("Org"))" href="/Org"><i class="bi bi-diagram-2"></i> Tổ chức</a>
+        </div>
+        <div class="mt-auto p-3" style="color:#5c4a2a;font-size:11px">Cổng ký số RSA-SHA256 · demo</div>
+    </nav>
+    <div class="main-content flex-fill" style="overflow-x:hidden">
+        <div class="topbar d-flex align-items-center justify-content-between">
+            <h6 class="mb-0 fw-bold">@ViewData["Title"]</h6>
+            <a href="/Org" class="text-muted small text-decoration-none"><i class="bi bi-diagram-2 me-1"></i>@(Context.Request.Cookies["org_name"] ?? "Demo Ký số")</a>
+        </div>
+        <div class="content-area">
+            @if (TempData["Success"] != null) { <div class="alert alert-success alert-dismissible fade show"><i class="bi bi-check-circle me-2"></i>@TempData["Success"]<button class="btn-close" data-bs-dismiss="alert"></button></div> }
+            @if (TempData["Error"] != null) { <div class="alert alert-danger alert-dismissible fade show"><i class="bi bi-exclamation-triangle me-2"></i>@TempData["Error"]<button class="btn-close" data-bs-dismiss="alert"></button></div> }
+            @RenderBody()
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

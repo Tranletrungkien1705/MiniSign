@@ -1,0 +1,31 @@
+@model List<Org>
+@{ ViewData["Title"] = "Tổ chức (multi-tenant)"; var cur = (string)ViewBag.CurrentKey; }
+<div class="row g-3">
+    <div class="col-lg-7"><div class="card"><div class="card-body">
+        <h6 class="fw-bold mb-3">Các đơn vị</h6>
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>Tên đơn vị</th><th>API Key</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var o in Model)
+            {
+                <tr>
+                    <td class="fw-semibold">@o.Name</td>
+                    <td><code class="small">@o.ApiKey</code></td>
+                    <td class="text-end">
+                        @if (o.ApiKey == cur) { <span class="badge bg-success">Đang chọn</span> }
+                        else { <form asp-action="Switch" method="post" class="d-inline">@Html.AntiForgeryToken()<input type="hidden" name="apiKey" value="@o.ApiKey" /><button class="btn btn-sm btn-outline-primary">Chuyển</button></form> }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div></div></div>
+    <div class="col-lg-5"><div class="card"><div class="card-body">
+        <h6 class="fw-bold mb-3">Tạo đơn vị mới</h6>
+        <form asp-action="Create" method="post">@Html.AntiForgeryToken()
+            <div class="mb-3"><input name="name" class="form-control" placeholder="Tên đơn vị" required /></div>
+            <button class="btn btn-primary w-100"><i class="bi bi-plus-lg me-1"></i>Tạo</button>
+        </form>
+        <div class="small text-muted mt-3">Mỗi đơn vị có chứng thư &amp; lượt ký riêng (lọc theo OrgId). API verify công khai xuyên tenant theo serial.</div>
+    </div></div></div>
+</div>
