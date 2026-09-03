@@ -74,9 +74,28 @@ app.MapPost("/api/orgs/register", async (RegisterOrgDto dto, AppDbContext db) =>
     return Results.Ok(new { orgId = org.Id, apiKey = org.ApiKey });
 });
 
+// Import chứng thư số đại diện cho nhiều đối tác (subject = tên đại lý, mỗi cert sinh RSA keypair thật)
+app.MapPost("/api/import/certs", async (List<ImportCertDto> rows, ISignService svc, AppDbContext db, ITenantContext tc) =>
+{
+    if (rows == null || rows.Count == 0) return Results.BadRequest(new { error = "Không có dữ liệu." });
+    int added = 0, skipped = 0;
+    var orgId = tc.OrgId;
+    var existSubjects = db.Certificates.Where(c => c.OrgId == orgId).Select(c => c.Subject).ToHashSet();
+    foreach (var row in rows)
+    {
+        if (string.IsNullOrWhiteSpace(row.Subject)) { skipped++; continue; }
+        var subj = row.Subject.Trim();
+        if (existSubjects.Contains(subj)) { skipped++; continue; }
+        var (ok, _, _) = await svc.CreateCertAsync(subj, row.Years > 0 ? row.Years : 3);
+        if (ok) { existSubjects.Add(subj); added++; } else skipped++;
+    }
+    return Results.Ok(new { added, skipped, total = added + skipped });
+});
+
 app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}");
 app.Run();
 
 record SignDto(int CertId, string? DocName, string? Content);
 record VerifyDto(string? Serial, string? Content, string? Signature);
 record RegisterOrgDto(string Name);
+record ImportCertDto(string? Subject, int Years);
