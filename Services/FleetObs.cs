@@ -72,4 +72,23 @@ public static class FleetObs
     { s.AddSingleton<ICache, RedisCache>(); s.AddEndpointsApiExplorer(); s.AddSwaggerGen(); }
     public static void UseFleetObs(this WebApplication app)
     { app.UseMiddleware<CorrelationMiddleware>(); app.UseSerilogRequestLogging(o => o.GetLevel = (ctx, _, ex) => ex != null || ctx.Response.StatusCode >= 500 ? LogEventLevel.Error : ctx.Request.Path.StartsWithSegments("/healthz") ? LogEventLevel.Verbose : LogEventLevel.Information); app.UseSwagger(); app.UseSwaggerUI(c => c.RoutePrefix = "swagger"); }
+
+    /// <summary>Bản quyền: tự báo cáo về MiniSSO khi khởi động (công khai, fire-and-forget, không chặn app nếu MiniSSO offline).</summary>
+    public static void ReportLicense(string ssoAuthority, string appSlug)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                var licenseKey = Environment.GetEnvironmentVariable("LICENSE_KEY") ?? "FLEET-DEFAULT-2026";
+                var instanceHost = Environment.GetEnvironmentVariable("RENDER_EXTERNAL_HOSTNAME") ?? Environment.MachineName;
+                var payload = JsonSerializer.Serialize(new { licenseKey, appSlug, instanceHost });
+                using var resp = await http.PostAsync($"{ssoAuthority}/api/v1/license/check", new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
+                var body = await resp.Content.ReadAsStringAsync();
+                Log.Information("License check {App}: {Body}", appSlug, body);
+            }
+            catch (Exception ex) { Log.Warning("License check {App} thất bại (bỏ qua, không chặn app): {Msg}", appSlug, ex.Message); }
+        });
+    }
 }
