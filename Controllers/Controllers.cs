@@ -212,6 +212,34 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
     }
 }
 
+// Hạn mức cấp số hóa đơn theo MST (port từ InBrand Invoice_license).
+public class LicenseController(ILicenseService licenses) : Controller
+{
+    public async Task<IActionResult> Index()
+    {
+        ViewBag.Dash = await licenses.DashboardAsync();
+        return View(await licenses.ListAsync());
+    }
+
+    // Tăng hạn mức (port từ Invoice_license_IncreaseQtyX). Qty phải >= 0.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Increase(string mst, long qty, string? by)
+    {
+        var r = await licenses.IncreaseQtyAsync(mst ?? "", qty, by ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+
+    // Tính lại hạn mức đã cấp/đã dùng từ các mẫu số (port từ Invoice_license_TotalQtyIssued/Used).
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Recompute(string mst, string? by)
+    {
+        var r = await licenses.RecomputeAsync(mst ?? "", by ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+}
+
 public class OrgController(AppDbContext db) : Controller
 {
     public async Task<IActionResult> Index()

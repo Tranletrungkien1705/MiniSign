@@ -12,7 +12,7 @@ namespace MiniSign.Controllers;
 [ApiController]
 [Route("api/v1")]
 [Produces("application/json")]
-public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache cache, ITenantContext tenant) : ControllerBase
+public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ILicenseService licenses, ICache cache, ITenantContext tenant) : ControllerBase
 {
     [HttpGet("dashboard")]
     public async Task<IActionResult> Dashboard()
@@ -227,6 +227,41 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         return Ok(new { d.Total, d.Pending, d.Approved, d.Issued, d.Canceled, d.Deleted });
     }
 
+    // ===== Hạn mức cấp số hóa đơn theo MST (port từ InBrand Invoice_license) =====
+
+    [HttpGet("licenses")]
+    public async Task<IActionResult> Licenses()
+        => Ok((await licenses.ListAsync()).Select(LicDto));
+
+    [HttpGet("licenses/dashboard")]
+    public async Task<IActionResult> LicenseDashboard()
+    {
+        var d = await licenses.DashboardAsync();
+        return Ok(new { d.Total, d.TotalQty, d.TotalQtyIssued, d.TotalQtyUsed, d.QtyRemain });
+    }
+
+    // Tăng hạn mức (port từ Invoice_license_IncreaseQtyX). Qty phải >= 0; MST chưa có thì tự tạo.
+    [HttpPost("licenses/{mst}/increase")]
+    public async Task<IActionResult> IncreaseLicense(string mst, [FromBody] LicenseIncreaseReq r)
+    {
+        var res = await licenses.IncreaseQtyAsync(mst, r.Qty, r.By ?? "");
+        return res.ok ? Ok(LicDto(res.license!)) : BadRequest(new { error = res.msg });
+    }
+
+    // Tính lại hạn mức đã cấp/đã dùng từ các mẫu số (port từ Invoice_license_TotalQtyIssued/Used).
+    [HttpPost("licenses/{mst}/recompute")]
+    public async Task<IActionResult> RecomputeLicense(string mst, [FromBody] LicenseRecomputeReq r)
+    {
+        var res = await licenses.RecomputeAsync(mst, r.By ?? "");
+        return res.ok ? Ok(LicDto(res.license!)) : BadRequest(new { error = res.msg, license = res.license == null ? null : LicDto(res.license) });
+    }
+
+    private static object LicDto(InvoiceLicense l) => new
+    {
+        l.Id, l.MST, l.NetworkID, l.TotalQty, l.TotalQtyIssued, l.TotalQtyUsed, l.QtyRemain,
+        l.FlagActive, l.LogLUBy, l.LogLUDTimeUTC, l.CreatedAt
+    };
+
     private static object InvDto(Invoice i) => new
     {
         i.Id, i.InvoiceCode, i.TaxCode, i.CustomerName, i.TotalValPmt,
@@ -287,3 +322,6 @@ public class InvoiceUpdateBody
     public decimal ValGoodsVAT10 { get; set; }
     public decimal ValVAT10 { get; set; }
 }
+
+public class LicenseIncreaseReq { public long Qty { get; set; } public string? By { get; set; } }
+public class LicenseRecomputeReq { public string? By { get; set; } }

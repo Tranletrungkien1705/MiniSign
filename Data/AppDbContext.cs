@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<SignLog> SignLogs => Set<SignLog>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceTemplate> InvoiceTemplates => Set<InvoiceTemplate>();
+    public DbSet<InvoiceLicense> InvoiceLicenses => Set<InvoiceLicense>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -38,6 +39,12 @@ public class AppDbContext : DbContext
         b.Entity<InvoiceTemplate>(e =>
         {
             e.HasIndex(x => new { x.OrgId, x.TInvoiceCode }).IsUnique();
+            e.Ignore(x => x.QtyRemain);
+            e.HasQueryFilter(x => x.OrgId == _orgId);
+        });
+        b.Entity<InvoiceLicense>(e =>
+        {
+            e.HasIndex(x => new { x.OrgId, x.MST }).IsUnique();
             e.Ignore(x => x.QtyRemain);
             e.HasQueryFilter(x => x.OrgId == _orgId);
         });

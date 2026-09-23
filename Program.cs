@@ -21,6 +21,7 @@ builder.Services.AddDbContext<AppDbContext>(o =>
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<ISignService, SignService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<ILicenseService, LicenseService>();
 builder.Services.AddFleetObs();
 builder.Services.AddControllersWithViews();
 
@@ -90,6 +91,30 @@ app.MapGet("/api/certinfo/{serial}", async (string serial, ISignService svc) =>
     return info == null ? Results.NotFound(new { error = "Không tìm thấy chứng thư." }) : Results.Ok(info);
 });
 
+// Hạn mức cấp số hóa đơn theo MST (port từ InBrand Invoice_license).
+app.MapGet("/api/licenses", async (ILicenseService lic) =>
+    Results.Ok((await lic.ListAsync()).Select(l => new
+    {
+        l.Id, l.MST, l.NetworkID, l.TotalQty, l.TotalQtyIssued, l.TotalQtyUsed, l.QtyRemain,
+        l.FlagActive, l.LogLUBy, l.LogLUDTimeUTC
+    })));
+
+// Tăng hạn mức (port từ Invoice_license_IncreaseQtyX). Qty phải >= 0.
+app.MapPost("/api/licenses/{mst}/increase", async (string mst, LicenseIncreaseDto dto, ILicenseService lic) =>
+{
+    var r = await lic.IncreaseQtyAsync(mst, dto.Qty, dto.By ?? "");
+    return r.ok ? Results.Ok(new { r.license!.MST, r.license.TotalQty, r.license.TotalQtyIssued, r.license.TotalQtyUsed, r.license.QtyRemain })
+                : Results.BadRequest(new { error = r.msg });
+});
+
+// Tính lại hạn mức đã cấp/đã dùng từ các mẫu số (port từ Invoice_license_TotalQtyIssued/Used).
+app.MapPost("/api/licenses/{mst}/recompute", async (string mst, LicenseRecomputeDto dto, ILicenseService lic) =>
+{
+    var r = await lic.RecomputeAsync(mst, dto.By ?? "");
+    return r.ok ? Results.Ok(new { r.license!.MST, r.license.TotalQty, r.license.TotalQtyIssued, r.license.TotalQtyUsed, r.license.QtyRemain })
+                : Results.BadRequest(new { error = r.msg });
+});
+
 app.MapPost("/api/orgs/register", async (RegisterOrgDto dto, AppDbContext db) =>
 {
     if (string.IsNullOrWhiteSpace(dto.Name)) return Results.BadRequest(new { error = "Cần Name." });
@@ -123,3 +148,5 @@ record SignDto(int CertId, string? DocName, string? Content);
 record VerifyDto(string? Serial, string? Content, string? Signature);
 record RegisterOrgDto(string Name);
 record ImportCertDto(string? Subject, int Years);
+record LicenseIncreaseDto(long Qty, string? By);
+record LicenseRecomputeDto(string? By);

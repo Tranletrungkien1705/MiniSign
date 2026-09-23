@@ -192,6 +192,32 @@ public class InvoiceTemplate : IOrgOwned
     public long QtyRemain => EndInvoiceNo - StartInvoiceNo + 1 - QtyUsed;
 }
 
+// Hạn mức (license) cấp số hóa đơn theo MST — port từ InBrand Invoice_license.
+// Mỗi MST (mã số thuế) có một hạn mức gồm:
+//  - TotalQty: tổng số hóa đơn được phép phát hành (hạn mức).
+//  - TotalQtyIssued: tổng số hóa đơn đã được CẤP dải số (sum EndInvoiceNo-StartInvoiceNo+1 của các mẫu ISSUED).
+//  - TotalQtyUsed: tổng số hóa đơn đã DÙNG (sum QtyUsed của các mẫu số).
+// Quy tắc (Invoice_license_TotalQtyIssued / Invoice_license_TotalQtyUsed):
+//  bất biến TotalQty >= TotalQtyIssued và TotalQtyUsed <= TotalQtyIssued.
+// Quy tắc (Invoice_license_IncreaseQtyX): tăng hạn mức TotalQty += Qty; Qty phải >= 0
+//  (lỗi Invoice_license_IncreaseQtyX_InvalidQty); MST phải tồn tại và license đang Active.
+public class InvoiceLicense : IOrgOwned
+{
+    public int Id { get; set; }
+    public Guid OrgId { get; set; }
+    public string MST { get; set; } = "";              // MST người nộp thuế (unique trong tenant)
+    public string NetworkID { get; set; } = "";        // Mã mạng (port từ Invoice_license.NetworkID)
+    public long TotalQty { get; set; } = 0;             // Hạn mức tổng (port từ Invoice_license.TotalQty)
+    public long TotalQtyIssued { get; set; } = 0;       // Đã cấp dải số (port từ Invoice_license.TotalQtyIssued)
+    public long TotalQtyUsed { get; set; } = 0;         // Đã dùng (port từ Invoice_license.TotalQtyUsed)
+    public bool FlagActive { get; set; } = true;        // Còn hiệu lực (port từ Invoice_license.FlagActive)
+    public string? LogLUBy { get; set; }                // Người cập nhật gần nhất (port từ Invoice_license.LogLUBy)
+    public DateTime? LogLUDTimeUTC { get; set; }        // Thời điểm cập nhật gần nhất (port từ Invoice_license.LogLUDTimeUTC)
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public long QtyRemain => TotalQty - TotalQtyIssued;  // Hạn mức còn lại có thể cấp
+}
+
 // Kết quả tra cứu/xác thực chứng thư theo serial + MST (port từ InBrand CertificateInfo:
 // "Check SerialNumber và MST có trong hệ thống" + GetCertificateInfo của Signature Server).
 public record CertValidation(
