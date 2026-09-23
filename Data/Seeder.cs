@@ -34,6 +34,20 @@ public static class Seeder
             db.SignLogs.Add(new SignLog { CertificateId = cert.Id, DocName = "HoaDon_1C26TAA_00000001.xml", Hash = hash, Signature = sig, ContentLength = Encoding.UTF8.GetByteCount(content) });
             await db.SaveChangesAsync();
         }
+
+        if (!await db.Invoices.AnyAsync())
+        {
+            db.Invoices.Add(new Invoice
+            {
+                InvoiceCode = "1C26TAA-00000001",
+                TaxCode = "0101234567",
+                CustomerName = "Công ty TNHH Khách Hàng Demo",
+                Content = "Hóa đơn 1C26TAA-00000001 | Tổng: 550,000,000đ",
+                TotalValPmt = 550_000_000m,
+                SignStatus = SignStatus.Pending
+            });
+            await db.SaveChangesAsync();
+        }
     }
 
     private static async Task MigratePostgresAsync(AppDbContext db)
@@ -43,7 +57,9 @@ public static class Seeder
         var tables = new[] { "Certificates", "SignLogs" };
         var sql = new List<string> {
             "CREATE TABLE IF NOT EXISTS minisign.\"Orgs\" (\"Id\" uuid PRIMARY KEY, \"Name\" text NOT NULL DEFAULT '', \"ApiKey\" text NOT NULL DEFAULT '', \"CreatedAt\" timestamp NOT NULL DEFAULT now())",
-            "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Orgs_ApiKey\" ON minisign.\"Orgs\" (\"ApiKey\")" };
+            "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Orgs_ApiKey\" ON minisign.\"Orgs\" (\"ApiKey\")",
+            "CREATE TABLE IF NOT EXISTS minisign.\"Invoices\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"InvoiceCode\" text NOT NULL DEFAULT '', \"TaxCode\" text NOT NULL DEFAULT '', \"CustomerName\" text NOT NULL DEFAULT '', \"Content\" text NOT NULL DEFAULT '', \"TotalValPmt\" numeric NOT NULL DEFAULT 0, \"SignStatus\" integer NOT NULL DEFAULT 0, \"SignBy\" text NULL, \"SignDTimeUTC\" timestamp NULL, \"SignSerial\" text NULL, \"Signature\" text NULL, \"SignError\" text NULL, \"CreatedAt\" timestamp NOT NULL DEFAULT now(), \"UpdatedAt\" timestamp NOT NULL DEFAULT now())",
+            "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Invoices_OrgId_InvoiceCode\" ON minisign.\"Invoices\" (\"OrgId\", \"InvoiceCode\")" };
         foreach (var t in tables) sql.Add($"ALTER TABLE minisign.\"{t}\" ADD COLUMN IF NOT EXISTS \"OrgId\" uuid NOT NULL DEFAULT '{def}'");
         sql.Add("ALTER TABLE minisign.\"Certificates\" ADD COLUMN IF NOT EXISTS \"TaxCode\" text NOT NULL DEFAULT ''");
         foreach (var s in sql) try { await db.Database.ExecuteSqlRawAsync(s); } catch { }

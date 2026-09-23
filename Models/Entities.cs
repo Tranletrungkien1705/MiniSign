@@ -7,6 +7,11 @@ public enum CertStatus { Active = 0, Revoked = 1, Expired = 2 }
 // Thuật toán ký số. Port từ InBrand: hóa đơn điện tử dùng SHA1WithRSA (signTTHD/SignatureVerify).
 public enum SignAlgorithm { SHA256withRSA = 0, SHA1withRSA = 1 }
 
+// Vòng đời trạng thái ký của một hóa đơn/tài liệu.
+// Port từ InBrand OS_Invoice_InvoiceTemp.SignStatus (TConst: PENDING/PROCESSING/SIGNED/FAILED).
+// Quy tắc nghiệp vụ: chỉ được phát hành/ký lại khi lần call trước ở trạng thái FAILED hoặc PROCESSING.
+public enum SignStatus { Pending = 0, Processing = 1, Signed = 2, Failed = 3 }
+
 public class Org
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -47,6 +52,27 @@ public class SignLog : IOrgOwned
     public string Algorithm { get; set; } = "SHA256withRSA";  // thuật toán đã dùng để ký
     public int ContentLength { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Hóa đơn/tài liệu cần ký — mang trạng thái ký (SignStatus) theo vòng đời.
+// Port từ InBrand OS_Invoice_InvoiceTemp (InvoiceCode, MST, SignStatus, SignBy, SignDTimeUTC...).
+public class Invoice : IOrgOwned
+{
+    public int Id { get; set; }
+    public Guid OrgId { get; set; }
+    public string InvoiceCode { get; set; } = "";        // Số tra cứu / mã hóa đơn (unique trong tenant)
+    public string TaxCode { get; set; } = "";            // MST người nộp thuế
+    public string CustomerName { get; set; } = "";       // Tên khách hàng
+    public string Content { get; set; } = "";            // Nội dung hóa đơn (bản rõ để ký)
+    public decimal TotalValPmt { get; set; }              // Tiền thanh toán
+    public SignStatus SignStatus { get; set; } = SignStatus.Pending;
+    public string? SignBy { get; set; }                   // Người ký
+    public DateTime? SignDTimeUTC { get; set; }           // Thời gian ký
+    public string? SignSerial { get; set; }               // Serial chứng thư đã dùng để ký
+    public string? Signature { get; set; }                // Chữ ký base64 (khi đã ký)
+    public string? SignError { get; set; }                // Lý do thất bại (khi SignStatus = Failed)
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
 // Kết quả tra cứu/xác thực chứng thư theo serial + MST (port từ InBrand CertificateInfo:

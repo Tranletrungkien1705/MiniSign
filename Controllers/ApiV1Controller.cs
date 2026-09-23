@@ -12,7 +12,7 @@ namespace MiniSign.Controllers;
 [ApiController]
 [Route("api/v1")]
 [Produces("application/json")]
-public class ApiV1Controller(ISignService svc, ICache cache, ITenantContext tenant) : ControllerBase
+public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache cache, ITenantContext tenant) : ControllerBase
 {
     [HttpGet("dashboard")]
     public async Task<IActionResult> Dashboard()
@@ -97,6 +97,49 @@ public class ApiV1Controller(ISignService svc, ICache cache, ITenantContext tena
     [HttpGet("signlogs")]
     public async Task<IActionResult> SignLogs([FromQuery] int? certId)
         => Ok((await svc.SignLogsAsync(certId)).Select(l => new { l.Id, cert = l.Certificate?.Subject, serial = l.Certificate?.Serial, l.DocName, l.Hash, l.ContentLength, l.CreatedAt }));
+
+    // ===== Hóa đơn ký số theo vòng đời trạng thái (port từ InBrand OS_Invoice_InvoiceTemp) =====
+
+    [HttpGet("invoices")]
+    public async Task<IActionResult> Invoices([FromQuery] int? status)
+        => Ok((await invoices.ListAsync(status.HasValue ? (SignStatus)status.Value : null)).Select(InvDto));
+
+    [HttpGet("invoices/dashboard")]
+    public async Task<IActionResult> InvoiceDashboard()
+    {
+        var d = await invoices.DashboardAsync();
+        return Ok(new { d.Total, d.Pending, d.Processing, d.Signed, d.Failed });
+    }
+
+    [HttpPost("invoices")]
+    public async Task<IActionResult> CreateInvoice([FromBody] InvoiceReq r)
+    {
+        var res = await invoices.CreateAsync(r.InvoiceCode ?? "", r.TaxCode ?? "", r.CustomerName ?? "", r.Content ?? "", r.TotalValPmt);
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg });
+    }
+
+    // Ký hóa đơn bằng chứng thư (SHA1withRSA — thuật toán hóa đơn điện tử).
+    [HttpPost("invoices/{id:int}/sign")]
+    public async Task<IActionResult> SignInvoice(int id, [FromBody] InvoiceSignReq r)
+    {
+        var res = await invoices.SignAsync(id, r.CertId, r.SignBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
+    // Đổi trạng thái ký (port từ UpdMultiSignStatus). Chỉ phát hành tiếp khi trước đó FAILED/PROCESSING.
+    [HttpPost("invoices/{id:int}/status")]
+    public async Task<IActionResult> SetInvoiceStatus(int id, [FromBody] InvoiceStatusReq r)
+    {
+        var res = await invoices.SetStatusAsync(id, (SignStatus)r.Status, r.Error);
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg });
+    }
+
+    private static object InvDto(Invoice i) => new
+    {
+        i.Id, i.InvoiceCode, i.TaxCode, i.CustomerName, i.TotalValPmt,
+        status = (int)i.SignStatus, statusText = i.SignStatus.ToString(),
+        i.SignBy, i.SignDTimeUTC, i.SignSerial, i.SignError, i.CreatedAt, i.UpdatedAt
+    };
 }
 
 public record DashDto(int Certs, int Active, int Signs);
@@ -105,3 +148,6 @@ public class CertReq { public string Subject { get; set; } = ""; public int Year
 public class SignReq { public int CertId { get; set; } public string? DocName { get; set; } public string? Content { get; set; } }
 public class VerifyReq { public string? Serial { get; set; } public string? Content { get; set; } public string? Signature { get; set; } }
 public class ValidateReq { public string? Serial { get; set; } public string? TaxCode { get; set; } }
+public class InvoiceReq { public string? InvoiceCode { get; set; } public string? TaxCode { get; set; } public string? CustomerName { get; set; } public string? Content { get; set; } public decimal TotalValPmt { get; set; } }
+public class InvoiceSignReq { public int CertId { get; set; } public string? SignBy { get; set; } }
+public class InvoiceStatusReq { public int Status { get; set; } public string? Error { get; set; } }

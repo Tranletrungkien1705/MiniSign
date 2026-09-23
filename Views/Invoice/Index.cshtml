@@ -1,0 +1,90 @@
+@model List<Invoice>
+@{
+    ViewData["Title"] = "Ký hóa đơn";
+    var certs = ViewBag.Certs as List<Certificate> ?? new();
+    var dash = ViewBag.Dash as InvoiceDash;
+    var cur = ViewBag.Status as int?;
+    string Badge(SignStatus s) => s switch
+    {
+        SignStatus.Signed => "success",
+        SignStatus.Failed => "danger",
+        SignStatus.Processing => "warning",
+        _ => "secondary"
+    };
+    string Label(SignStatus s) => s switch
+    {
+        SignStatus.Signed => "Đã ký",
+        SignStatus.Failed => "Thất bại",
+        SignStatus.Processing => "Đang xử lý",
+        _ => "Chờ ký"
+    };
+}
+@if (dash != null)
+{
+    <div class="row g-3 mb-3">
+        <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Tổng</div><div class="stat-num">@dash.Total</div></div></div></div>
+        <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Chờ ký</div><div class="stat-num text-secondary">@dash.Pending</div></div></div></div>
+        <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Đang xử lý</div><div class="stat-num text-warning">@dash.Processing</div></div></div></div>
+        <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Đã ký</div><div class="stat-num text-success">@dash.Signed</div></div></div></div>
+        <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Thất bại</div><div class="stat-num text-danger">@dash.Failed</div></div></div></div>
+    </div>
+}
+<div class="row g-3">
+    <div class="col-lg-8"><div class="card"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="fw-bold mb-0">Hóa đơn &amp; trạng thái ký</h6>
+            <div class="btn-group btn-group-sm">
+                <a class="btn btn-outline-secondary @(cur == null ? "active" : "")" href="/Invoice">Tất cả</a>
+                <a class="btn btn-outline-secondary @(cur == 0 ? "active" : "")" href="/Invoice?status=0">Chờ ký</a>
+                <a class="btn btn-outline-secondary @(cur == 2 ? "active" : "")" href="/Invoice?status=2">Đã ký</a>
+                <a class="btn btn-outline-secondary @(cur == 3 ? "active" : "")" href="/Invoice?status=3">Thất bại</a>
+            </div>
+        </div>
+        <table class="table table-hover align-middle mb-0">
+            <thead><tr><th>Số tra cứu</th><th>Khách hàng</th><th class="text-end">Thanh toán</th><th>Trạng thái ký</th><th>Người ký</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var i in Model)
+            {
+                <tr>
+                    <td class="fw-semibold mono">@i.InvoiceCode</td>
+                    <td class="small">@i.CustomerName<div class="text-muted mono" style="font-size:11px">MST @i.TaxCode</div></td>
+                    <td class="text-end small">@i.TotalValPmt.ToString("N0")</td>
+                    <td><span class="badge bg-@Badge(i.SignStatus)">@Label(i.SignStatus)</span>
+                        @if (i.SignStatus == SignStatus.Failed && !string.IsNullOrEmpty(i.SignError)) { <div class="text-danger" style="font-size:11px">@i.SignError</div> }
+                    </td>
+                    <td class="small">@(i.SignBy ?? "—")@if (i.SignDTimeUTC != null) { <div class="text-muted" style="font-size:11px">@i.SignDTimeUTC.Value.ToLocalTime().ToString("dd/MM HH:mm")</div> }</td>
+                    <td class="text-end">
+                        @if (i.SignStatus != SignStatus.Signed && certs.Count > 0)
+                        {
+                            <form asp-action="Sign" method="post" class="d-inline">@Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@i.Id" />
+                                <select name="certId" class="form-select form-select-sm d-inline-block" style="width:auto">
+                                    @foreach (var c in certs) { <option value="@c.Id">@c.Subject</option> }
+                                </select>
+                                <button class="btn btn-sm btn-primary">Ký</button>
+                            </form>
+                        }
+                        else if (i.SignStatus == SignStatus.Signed)
+                        {
+                            <span class="text-success small"><i class="bi bi-patch-check-fill"></i> @i.SignSerial</span>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (Model.Count == 0) { <tr><td colspan="6" class="text-center text-muted py-4">Chưa có hóa đơn.</td></tr> }
+            </tbody>
+        </table>
+    </div></div></div>
+    <div class="col-lg-4"><div class="card"><div class="card-body">
+        <h6 class="fw-bold mb-3">Tạo hóa đơn chờ ký</h6>
+        <form asp-action="Create" method="post">@Html.AntiForgeryToken()
+            <div class="mb-2"><input name="invoiceCode" class="form-control mono" placeholder="Số tra cứu (VD 1C26TAA-00000001) *" required /></div>
+            <div class="mb-2"><input name="taxCode" class="form-control mono" placeholder="MST người nộp thuế" /></div>
+            <div class="mb-2"><input name="customerName" class="form-control" placeholder="Tên khách hàng" /></div>
+            <div class="mb-2"><input name="totalValPmt" type="number" step="1000" value="0" class="form-control" placeholder="Tiền thanh toán" /></div>
+            <div class="mb-3"><textarea name="content" class="form-control" rows="3" placeholder="Nội dung hóa đơn (bản rõ để ký) *" required></textarea></div>
+            <button class="btn btn-primary w-100"><i class="bi bi-file-earmark-plus me-1"></i>Tạo hóa đơn</button>
+        </form>
+        <div class="small text-muted mt-3">Ký hóa đơn bằng <span class="mono">SHA1withRSA</span> (thuật toán hóa đơn điện tử). Vòng đời trạng thái ký port từ InBrand <span class="mono">OS_Invoice_InvoiceTemp</span>.</div>
+    </div></div></div>
+</div>

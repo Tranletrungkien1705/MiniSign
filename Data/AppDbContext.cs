@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<Org> Orgs => Set<Org>();
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<SignLog> SignLogs => Set<SignLog>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -26,6 +27,11 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(x => new { x.OrgId, x.CertificateId });
             e.HasOne(x => x.Certificate).WithMany().HasForeignKey(x => x.CertificateId);
+            e.HasQueryFilter(x => x.OrgId == _orgId);
+        });
+        b.Entity<Invoice>(e =>
+        {
+            e.HasIndex(x => new { x.OrgId, x.InvoiceCode }).IsUnique();
             e.HasQueryFilter(x => x.OrgId == _orgId);
         });
     }

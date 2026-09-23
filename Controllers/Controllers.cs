@@ -93,6 +93,42 @@ public class RegistryController(ISignService svc) : Controller
     }
 }
 
+// Ký hóa đơn/tài liệu theo vòng đời trạng thái (port từ InBrand OS_Invoice_InvoiceTemp).
+public class InvoiceController(IInvoiceService invoices, ISignService svc) : Controller
+{
+    public async Task<IActionResult> Index(int? status)
+    {
+        ViewBag.Certs = await svc.CertsAsync();
+        ViewBag.Dash = await invoices.DashboardAsync();
+        ViewBag.Status = status;
+        return View(await invoices.ListAsync(status.HasValue ? (SignStatus)status.Value : null));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(string invoiceCode, string? taxCode, string? customerName, string content, decimal totalValPmt)
+    {
+        var r = await invoices.CreateAsync(invoiceCode, taxCode ?? "", customerName ?? "", content ?? "", totalValPmt);
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Sign(int id, int certId, string? signBy)
+    {
+        var r = await invoices.SignAsync(id, certId, signBy ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetStatus(int id, int status, string? error)
+    {
+        var r = await invoices.SetStatusAsync(id, (SignStatus)status, error);
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+}
+
 public class OrgController(AppDbContext db) : Controller
 {
     public async Task<IActionResult> Index()

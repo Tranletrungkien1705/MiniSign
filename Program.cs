@@ -20,6 +20,7 @@ builder.Services.AddDbContext<AppDbContext>(o =>
 });
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<ISignService, SignService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddFleetObs();
 builder.Services.AddControllersWithViews();
 
