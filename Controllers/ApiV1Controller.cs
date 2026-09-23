@@ -134,11 +134,29 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg });
     }
 
+    // Hủy hóa đơn (port từ InBrand Invoice_Invoice_Cancel). Chỉ hủy khi PENDING/APPROVED.
+    [HttpPost("invoices/{id:int}/cancel")]
+    public async Task<IActionResult> CancelInvoice(int id, [FromBody] InvoiceCancelReq r)
+    {
+        var res = await invoices.CancelAsync(id, r.Reason ?? "", r.CancelBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
+    // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
+    [HttpGet("invoices/lifecycle")]
+    public async Task<IActionResult> InvoiceLifecycle()
+    {
+        var d = await invoices.LifecycleDashboardAsync();
+        return Ok(new { d.Total, d.Pending, d.Approved, d.Issued, d.Canceled });
+    }
+
     private static object InvDto(Invoice i) => new
     {
         i.Id, i.InvoiceCode, i.TaxCode, i.CustomerName, i.TotalValPmt,
         status = (int)i.SignStatus, statusText = i.SignStatus.ToString(),
-        i.SignBy, i.SignDTimeUTC, i.SignSerial, i.SignError, i.CreatedAt, i.UpdatedAt
+        lifecycle = (int)i.Status, lifecycleText = i.Status.ToString(),
+        i.SignBy, i.SignDTimeUTC, i.SignSerial, i.SignError,
+        i.CancelBy, i.CancelDTimeUTC, i.CancelReason, i.CreatedAt, i.UpdatedAt
     };
 }
 
@@ -151,3 +169,4 @@ public class ValidateReq { public string? Serial { get; set; } public string? Ta
 public class InvoiceReq { public string? InvoiceCode { get; set; } public string? TaxCode { get; set; } public string? CustomerName { get; set; } public string? Content { get; set; } public decimal TotalValPmt { get; set; } }
 public class InvoiceSignReq { public int CertId { get; set; } public string? SignBy { get; set; } }
 public class InvoiceStatusReq { public int Status { get; set; } public string? Error { get; set; } }
+public class InvoiceCancelReq { public string? Reason { get; set; } public string? CancelBy { get; set; } }

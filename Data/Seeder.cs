@@ -58,10 +58,14 @@ public static class Seeder
         var sql = new List<string> {
             "CREATE TABLE IF NOT EXISTS minisign.\"Orgs\" (\"Id\" uuid PRIMARY KEY, \"Name\" text NOT NULL DEFAULT '', \"ApiKey\" text NOT NULL DEFAULT '', \"CreatedAt\" timestamp NOT NULL DEFAULT now())",
             "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Orgs_ApiKey\" ON minisign.\"Orgs\" (\"ApiKey\")",
-            "CREATE TABLE IF NOT EXISTS minisign.\"Invoices\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"InvoiceCode\" text NOT NULL DEFAULT '', \"TaxCode\" text NOT NULL DEFAULT '', \"CustomerName\" text NOT NULL DEFAULT '', \"Content\" text NOT NULL DEFAULT '', \"TotalValPmt\" numeric NOT NULL DEFAULT 0, \"SignStatus\" integer NOT NULL DEFAULT 0, \"SignBy\" text NULL, \"SignDTimeUTC\" timestamp NULL, \"SignSerial\" text NULL, \"Signature\" text NULL, \"SignError\" text NULL, \"CreatedAt\" timestamp NOT NULL DEFAULT now(), \"UpdatedAt\" timestamp NOT NULL DEFAULT now())",
+            "CREATE TABLE IF NOT EXISTS minisign.\"Invoices\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"InvoiceCode\" text NOT NULL DEFAULT '', \"TaxCode\" text NOT NULL DEFAULT '', \"CustomerName\" text NOT NULL DEFAULT '', \"Content\" text NOT NULL DEFAULT '', \"TotalValPmt\" numeric NOT NULL DEFAULT 0, \"SignStatus\" integer NOT NULL DEFAULT 0, \"SignBy\" text NULL, \"SignDTimeUTC\" timestamp NULL, \"SignSerial\" text NULL, \"Signature\" text NULL, \"SignError\" text NULL, \"Status\" integer NOT NULL DEFAULT 0, \"CancelBy\" text NULL, \"CancelDTimeUTC\" timestamp NULL, \"CancelReason\" text NULL, \"CreatedAt\" timestamp NOT NULL DEFAULT now(), \"UpdatedAt\" timestamp NOT NULL DEFAULT now())",
             "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Invoices_OrgId_InvoiceCode\" ON minisign.\"Invoices\" (\"OrgId\", \"InvoiceCode\")" };
         foreach (var t in tables) sql.Add($"ALTER TABLE minisign.\"{t}\" ADD COLUMN IF NOT EXISTS \"OrgId\" uuid NOT NULL DEFAULT '{def}'");
         sql.Add("ALTER TABLE minisign.\"Certificates\" ADD COLUMN IF NOT EXISTS \"TaxCode\" text NOT NULL DEFAULT ''");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"Status\" integer NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CancelBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CancelDTimeUTC\" timestamp NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CancelReason\" text NULL");
         foreach (var s in sql) try { await db.Database.ExecuteSqlRawAsync(s); } catch { }
     }
 }

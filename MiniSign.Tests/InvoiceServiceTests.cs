@@ -123,4 +123,61 @@ public class InvoiceServiceTests
             Assert.Equal(1, d.Pending);
         }
     }
+
+    // Hủy hóa đơn (port từ InBrand Invoice_Invoice_Cancel): PENDING/APPROVED mới được hủy.
+    [Fact]
+    public async Task Cancel_Pending_BecomesCanceled()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "0101234567", "Cty ABC", "Nội dung", 1000m);
+            var r = await inv.CancelAsync(c.invoice!.Id, "sai thông tin khách hàng", "ketoan01");
+            Assert.True(r.ok);
+            Assert.Equal(InvoiceStatus.Canceled, r.invoice!.Status);
+            Assert.Equal("ketoan01", r.invoice.CancelBy);
+            Assert.Equal("sai thông tin khách hàng", r.invoice.CancelReason);
+            Assert.NotNull(r.invoice.CancelDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task Cancel_AlreadyCanceled_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.CancelAsync(c.invoice!.Id, "lần 1", "u1");
+            var r = await inv.CancelAsync(c.invoice.Id, "lần 2", "u1");
+            Assert.False(r.ok);   // đã hủy → không hủy lại
+        }
+    }
+
+    [Fact]
+    public async Task Cancel_Issued_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            // Giả lập hóa đơn đã phát hành (ISSUED) — không nằm trong PENDING/APPROVED.
+            c.invoice!.Status = InvoiceStatus.Issued;
+            await inv.SetStatusAsync(c.invoice.Id, SignStatus.Signed, null);
+            var r = await inv.CancelAsync(c.invoice.Id, "lý do", "u1");
+            Assert.False(r.ok);
+        }
+    }
+
+    [Fact]
+    public async Task LifecycleDashboard_CountsByStatus()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var a = await inv.CreateAsync("HD-001", "", "", "a", 0m);
+            await inv.CreateAsync("HD-002", "", "", "b", 0m);
+            await inv.CancelAsync(a.invoice!.Id, "lý do", "u1");
+            var d = await inv.LifecycleDashboardAsync();
+            Assert.Equal(2, d.Total);
+            Assert.Equal(1, d.Pending);
+            Assert.Equal(1, d.Canceled);
+        }
+    }
 }

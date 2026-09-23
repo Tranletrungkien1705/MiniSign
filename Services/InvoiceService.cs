@@ -10,6 +10,9 @@ public record InvoiceResult(bool ok, string msg, Invoice? invoice);
 // Thống kê hóa đơn theo trạng thái ký.
 public record InvoiceDash(int Total, int Pending, int Processing, int Signed, int Failed);
 
+// Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
+public record InvoiceLifecycleDash(int Total, int Pending, int Approved, int Issued, int Canceled);
+
 // Nghiệp vụ ký hóa đơn/tài liệu theo vòng đời trạng thái.
 // Port từ InBrand OS_Invoice_InvoiceTemp + OS_Invoice_InvoiceTemp_UpdMultiSignStatus:
 //  - Hóa đơn có SignStatus (PENDING/PROCESSING/SIGNED/FAILED).
@@ -23,7 +26,9 @@ public interface IInvoiceService
     Task<InvoiceResult> CreateAsync(string invoiceCode, string taxCode, string customerName, string content, decimal totalValPmt);
     Task<InvoiceResult> SignAsync(int id, int certId, string signBy);
     Task<InvoiceResult> SetStatusAsync(int id, SignStatus status, string? error);
+    Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy);
     Task<InvoiceDash> DashboardAsync();
+    Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
 }
 
 public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceService
@@ -119,4 +124,30 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         await db.Invoices.CountAsync(i => i.SignStatus == SignStatus.Processing),
         await db.Invoices.CountAsync(i => i.SignStatus == SignStatus.Signed),
         await db.Invoices.CountAsync(i => i.SignStatus == SignStatus.Failed));
+
+    // Hủy hóa đơn (port từ InBrand Invoice_Invoice_Cancel / Invoice_Invoice_CancelX_New20190705).
+    // Quy tắc InBrand: hóa đơn phải tồn tại và đang ở trạng thái PENDING hoặc APPROVED mới được hủy;
+    // khi hủy ghi InvoiceStatus = CANCELED + người hủy + thời gian hủy + lý do (Remark).
+    public async Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Pending && inv.Status != InvoiceStatus.Approved)
+            return new(false, "Chỉ được hủy hóa đơn ở trạng thái PENDING hoặc APPROVED.", inv);
+
+        inv.Status = InvoiceStatus.Canceled;
+        inv.CancelReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        inv.CancelBy = string.IsNullOrWhiteSpace(cancelBy) ? "system" : cancelBy.Trim();
+        inv.CancelDTimeUTC = DateTime.UtcNow;
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, "Đã hủy hóa đơn.", inv);
+    }
+
+    public async Task<InvoiceLifecycleDash> LifecycleDashboardAsync() => new(
+        await db.Invoices.CountAsync(),
+        await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Pending),
+        await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Approved),
+        await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Issued),
+        await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Canceled));
 }

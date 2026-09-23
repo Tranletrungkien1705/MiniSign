@@ -12,6 +12,11 @@ public enum SignAlgorithm { SHA256withRSA = 0, SHA1withRSA = 1 }
 // Quy tắc nghiệp vụ: chỉ được phát hành/ký lại khi lần call trước ở trạng thái FAILED hoặc PROCESSING.
 public enum SignStatus { Pending = 0, Processing = 1, Signed = 2, Failed = 3 }
 
+// Vòng đời trạng thái HÓA ĐƠN (khác với trạng thái ký).
+// Port từ InBrand TConst.InvoiceStatus (PENDING/APPROVED/ISSUED/CANCELED/DELETED).
+// Quy tắc nghiệp vụ (Invoice_Invoice_CancelX): chỉ được HỦY khi hóa đơn đang ở PENDING hoặc APPROVED.
+public enum InvoiceStatus { Pending = 0, Approved = 1, Issued = 2, Canceled = 3 }
+
 public class Org
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -71,6 +76,13 @@ public class Invoice : IOrgOwned
     public string? SignSerial { get; set; }               // Serial chứng thư đã dùng để ký
     public string? Signature { get; set; }                // Chữ ký base64 (khi đã ký)
     public string? SignError { get; set; }                // Lý do thất bại (khi SignStatus = Failed)
+
+    // Trạng thái vòng đời hóa đơn (port từ InBrand InvoiceStatus). Mặc định PENDING khi tạo.
+    public InvoiceStatus Status { get; set; } = InvoiceStatus.Pending;
+    public string? CancelBy { get; set; }                 // Người hủy (port từ Invoice_Invoice.CancelBy)
+    public DateTime? CancelDTimeUTC { get; set; }         // Thời gian hủy (port từ Invoice_Invoice.CancelDTimeUTC)
+    public string? CancelReason { get; set; }             // Lý do hủy (port từ Invoice_Invoice.Remark)
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
