@@ -87,6 +87,13 @@ public class Invoice : IOrgOwned
     // Số hóa đơn (InvoiceNo) — bắt buộc phải có trước khi DUYỆT.
     // Port từ InBrand Invoice_Invoice_ApprovedMultiX: "InvoiceNoIsNotNull" (không được rỗng khi duyệt).
     public string? InvoiceNo { get; set; }
+
+    // Cấp số hóa đơn (port từ InBrand Invoice_Invoice_AllocatedInvX_New20190917).
+    // Mẫu số hóa đơn dùng để cấp số (TInvoiceCode) + ngày hóa đơn + người/thời điểm cấp số.
+    public string? TInvoiceCode { get; set; }             // Mẫu số HĐ (port từ Invoice_Invoice.TInvoiceCode)
+    public DateTime? InvoiceDateUTC { get; set; }         // Ngày hóa đơn (port từ Invoice_Invoice.InvoiceDateUTC)
+    public string? InvoiceNoBy { get; set; }              // Người cấp số (port từ Invoice_Invoice.InvoiceNoBy)
+    public DateTime? InvoiceNoDTimeUTC { get; set; }      // Thời điểm cấp số (port từ Invoice_Invoice.InvoiceNoDTimeUTC)
     public string? ApprBy { get; set; }                   // Người duyệt (port từ Invoice_Invoice.ApprBy)
     public DateTime? ApprDTimeUTC { get; set; }           // Thời gian duyệt (port từ Invoice_Invoice.ApprDTimeUTC)
     public string? IssuedBy { get; set; }                 // Người phát hành (port từ Invoice_Invoice.IssuedBy)
@@ -101,6 +108,31 @@ public class Invoice : IOrgOwned
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Mẫu số hóa đơn (Invoice_TempInvoice) — dải số được cấp phát cho một MST.
+// Port từ InBrand Invoice_TempInvoice: StartInvoiceNo/EndInvoiceNo/QtyUsed/LastInvoiceNo/LastInvoiceDateUTC/EffDateStart.
+// Quy tắc cấp số (Invoice_Invoice_AllocatedInvX_New20190917):
+//  - Số HĐ kế tiếp = StartInvoiceNo + QtyUsed; sau khi cấp thì QtyUsed++ và LastInvoiceNo = số vừa cấp.
+//  - Số HĐ phải nằm trong [StartInvoiceNo, EndInvoiceNo] (myCheck_Invoice_TempInvoice_InvoiceNo).
+//  - Ngày hóa đơn phải >= LastInvoiceDateUTC (ngày cấp số trước đó) và >= EffDateStart (ngày hiệu lực mẫu).
+public class InvoiceTemplate : IOrgOwned
+{
+    public int Id { get; set; }
+    public Guid OrgId { get; set; }
+    public string TInvoiceCode { get; set; } = "";        // Mã mẫu số HĐ (unique trong tenant)
+    public string TaxCode { get; set; } = "";             // MST được cấp dải số
+    public string InvoiceSerial { get; set; } = "";       // Ký hiệu hóa đơn (port từ Invoice_TempInvoice.InvoiceSerial)
+    public long StartInvoiceNo { get; set; } = 1;         // Số bắt đầu của dải
+    public long EndInvoiceNo { get; set; } = 0;           // Số kết thúc của dải
+    public long QtyUsed { get; set; } = 0;                // Số lượng đã dùng
+    public string? LastInvoiceNo { get; set; }            // Số HĐ cấp gần nhất
+    public DateTime? LastInvoiceDateUTC { get; set; }     // Ngày hóa đơn cấp gần nhất
+    public DateTime EffDateStart { get; set; } = DateTime.Today;  // Ngày hiệu lực mẫu
+    public bool FlagActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public long QtyRemain => EndInvoiceNo - StartInvoiceNo + 1 - QtyUsed;
 }
 
 // Kết quả tra cứu/xác thực chứng thư theo serial + MST (port từ InBrand CertificateInfo:

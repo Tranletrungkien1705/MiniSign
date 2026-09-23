@@ -101,6 +101,7 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
         ViewBag.Certs = await svc.CertsAsync();
         ViewBag.Dash = await invoices.DashboardAsync();
         ViewBag.Lifecycle = await invoices.LifecycleDashboardAsync();
+        ViewBag.Templates = await invoices.TemplatesAsync();
         ViewBag.Status = status;
         return View(await invoices.ListAsync(status.HasValue ? (SignStatus)status.Value : null));
     }
@@ -125,6 +126,15 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
     public async Task<IActionResult> SetStatus(int id, int status, string? error)
     {
         var r = await invoices.SetStatusAsync(id, (SignStatus)status, error);
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+
+    // Cấp số hóa đơn (port từ InBrand Invoice_Invoice_AllocatedInvX_New20190917).
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Allocate(int id, string? tInvoiceCode, DateTime invoiceDateUtc, string? allocateBy)
+    {
+        var r = await invoices.AllocateAsync(id, tInvoiceCode ?? "", invoiceDateUtc, allocateBy ?? "");
         TempData[r.ok ? "Success" : "Error"] = r.msg;
         return RedirectToAction(nameof(Index));
     }

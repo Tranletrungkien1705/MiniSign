@@ -35,6 +35,22 @@ public static class Seeder
             await db.SaveChangesAsync();
         }
 
+        if (!await db.InvoiceTemplates.AnyAsync())
+        {
+            db.InvoiceTemplates.Add(new InvoiceTemplate
+            {
+                TInvoiceCode = "1C26TAA",
+                TaxCode = "0101234567",
+                InvoiceSerial = "C26TAA",
+                StartInvoiceNo = 1,
+                EndInvoiceNo = 1000,
+                QtyUsed = 0,
+                EffDateStart = DateTime.Today.AddMonths(-1),
+                FlagActive = true
+            });
+            await db.SaveChangesAsync();
+        }
+
         if (!await db.Invoices.AnyAsync())
         {
             db.Invoices.Add(new Invoice
@@ -75,6 +91,12 @@ public static class Seeder
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"DeleteDTimeUTC\" timestamp NULL");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"DeleteReason\" text NULL");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"AttachedDelFilePath\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"TInvoiceCode\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"InvoiceDateUTC\" timestamp NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"InvoiceNoBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"InvoiceNoDTimeUTC\" timestamp NULL");
+        sql.Add("CREATE TABLE IF NOT EXISTS minisign.\"InvoiceTemplates\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"TInvoiceCode\" text NOT NULL DEFAULT '', \"TaxCode\" text NOT NULL DEFAULT '', \"InvoiceSerial\" text NOT NULL DEFAULT '', \"StartInvoiceNo\" bigint NOT NULL DEFAULT 1, \"EndInvoiceNo\" bigint NOT NULL DEFAULT 0, \"QtyUsed\" bigint NOT NULL DEFAULT 0, \"LastInvoiceNo\" text NULL, \"LastInvoiceDateUTC\" timestamp NULL, \"EffDateStart\" timestamp NOT NULL DEFAULT now(), \"FlagActive\" boolean NOT NULL DEFAULT true, \"CreatedAt\" timestamp NOT NULL DEFAULT now())");
+        sql.Add("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_InvoiceTemplates_OrgId_TInvoiceCode\" ON minisign.\"InvoiceTemplates\" (\"OrgId\", \"TInvoiceCode\")");
         foreach (var s in sql) try { await db.Database.ExecuteSqlRawAsync(s); } catch { }
     }
 }

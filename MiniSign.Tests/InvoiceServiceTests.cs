@@ -293,4 +293,123 @@ public class InvoiceServiceTests
             Assert.Equal(InvoiceStatus.Deleted, r.invoice!.Status);
         }
     }
+
+    // ===== Cấp số hóa đơn (port từ InBrand Invoice_Invoice_AllocatedInvX_New20190917) =====
+
+    private static async Task<InvoiceTemplate> SeedTemplate(AppDbContext db, long start = 1, long end = 1000)
+    {
+        var t = new InvoiceTemplate
+        {
+            TInvoiceCode = "1C26TAA",
+            TaxCode = "0101234567",
+            InvoiceSerial = "C26TAA",
+            StartInvoiceNo = start,
+            EndInvoiceNo = end,
+            QtyUsed = 0,
+            EffDateStart = DateTime.Today.AddMonths(-1),
+            FlagActive = true
+        };
+        db.InvoiceTemplates.Add(t); await db.SaveChangesAsync();
+        return t;
+    }
+
+    [Fact]
+    public async Task Allocate_Pending_AssignsNextInvoiceNo()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "0101234567", "Cty ABC", "Nội dung", 1000m);
+            var r = await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "ketoan01");
+            Assert.True(r.ok);
+            Assert.Equal("0000001", r.invoice!.InvoiceNo);   // StartInvoiceNo(1) + QtyUsed(0)
+            Assert.Equal("ketoan01", r.invoice.InvoiceNoBy);
+            Assert.NotNull(r.invoice.InvoiceNoDTimeUTC);
+            Assert.Equal(DateTime.Today, r.invoice.InvoiceDateUTC!.Value.Date);
+            // Mẫu đã tăng QtyUsed và ghi LastInvoiceNo.
+            var tpl = await db.InvoiceTemplates.FirstAsync();
+            Assert.Equal(1, tpl.QtyUsed);
+            Assert.Equal("0000001", tpl.LastInvoiceNo);
+        }
+    }
+
+    [Fact]
+    public async Task Allocate_SecondInvoice_IncrementsNumber()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var a = await inv.CreateAsync("HD-001", "", "", "a", 0m);
+            var b = await inv.CreateAsync("HD-002", "", "", "b", 0m);
+            await inv.AllocateAsync(a.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            var r = await inv.AllocateAsync(b.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            Assert.True(r.ok);
+            Assert.Equal("0000002", r.invoice!.InvoiceNo);
+        }
+    }
+
+    [Fact]
+    public async Task Allocate_AlreadyHasInvoiceNo_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            var r = await inv.AllocateAsync(c.invoice.Id, "1C26TAA", DateTime.Today, "u1");
+            Assert.False(r.ok);   // đã có số → không cấp lại
+        }
+    }
+
+    [Fact]
+    public async Task Allocate_FutureDate_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today.AddDays(5), "u1");
+            Assert.False(r.ok);   // ngày hóa đơn ở tương lai
+            Assert.Null(r.invoice!.InvoiceNo);
+        }
+    }
+
+    [Fact]
+    public async Task Allocate_BeforeLastInvoiceDate_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var tpl = await SeedTemplate(db);
+            tpl.LastInvoiceDateUTC = DateTime.Today;   // đã cấp số hôm nay
+            await db.SaveChangesAsync();
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today.AddDays(-1), "u1");
+            Assert.False(r.ok);   // ngày HĐ < ngày cấp gần nhất
+        }
+    }
+
+    [Fact]
+    public async Task Allocate_RangeExhausted_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var tpl = await SeedTemplate(db, start: 1, end: 1);
+            tpl.QtyUsed = 1;   // dải chỉ có 1 số, đã dùng hết
+            await db.SaveChangesAsync();
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            Assert.False(r.ok);   // hết dải số
+        }
+    }
+
+    [Fact]
+    public async Task Allocate_UnknownTemplate_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.AllocateAsync(c.invoice!.Id, "KHONG-CO", DateTime.Today, "u1");
+            Assert.False(r.ok);
+        }
+    }
 }

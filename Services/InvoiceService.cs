@@ -27,6 +27,8 @@ public interface IInvoiceService
     Task<InvoiceResult> SignAsync(int id, int certId, string signBy);
     Task<InvoiceResult> SetStatusAsync(int id, SignStatus status, string? error);
     Task<InvoiceResult> ApproveAsync(int id, string invoiceNo, string apprBy);
+    Task<InvoiceResult> AllocateAsync(int id, string tInvoiceCode, DateTime invoiceDateUtc, string allocateBy);
+    Task<List<InvoiceTemplate>> TemplatesAsync();
     Task<InvoiceResult> IssueAsync(int id, string issuedBy);
     Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy);
     Task<InvoiceResult> DeleteAsync(int id, string reason, string deleteBy, string? attachedDelFilePath);
@@ -152,6 +154,64 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         await db.SaveChangesAsync();
         return new(true, "Đã duyệt hóa đơn.", inv);
     }
+
+    // Cấp số hóa đơn (port từ InBrand Invoice_Invoice_AllocatedInvX_New20190917).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái PENDING (Invoice_Invoice_CheckDB với InvoiceStatus.Pending).
+    //  - Hóa đơn chưa được cấp số (InvoiceNo phải rỗng) — lỗi Invoice_Invoice_AllocatedInv_NotAllowAllocatedInv.
+    //  - Ngày hóa đơn bắt buộc (Invoice_Invoice_AllocatedInv_InvoiceDateUTCIsNotNull).
+    //  - Ngày hóa đơn >= LastInvoiceDateUTC của mẫu (InvalidInvoiceDateUTCBeforeLastInvoiceDateUTC).
+    //  - Ngày hóa đơn >= EffDateStart của mẫu (InvalidInvoiceDateUTCBeforeEffDateStart).
+    //  - Ngày hóa đơn không được ở tương lai (InvaliInvoiceDateUTCAfterSysDate).
+    //  - Số HĐ kế tiếp = StartInvoiceNo + QtyUsed; phải nằm trong [StartInvoiceNo, EndInvoiceNo]
+    //    (myCheck_Invoice_TempInvoice_InvoiceNo); sau khi cấp thì QtyUsed++ và LastInvoiceNo = số vừa cấp.
+    public async Task<InvoiceResult> AllocateAsync(int id, string tInvoiceCode, DateTime invoiceDateUtc, string allocateBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Pending)
+            return new(false, "Chỉ được cấp số hóa đơn ở trạng thái PENDING.", inv);
+        if (!string.IsNullOrEmpty(inv.InvoiceNo))
+            return new(false, "Hóa đơn đã có số — không cấp lại.", inv);
+
+        var code = (tInvoiceCode ?? "").Trim();
+        if (code.Length == 0) return new(false, "Cần chọn mẫu số hóa đơn (TInvoiceCode).", inv);
+
+        var tpl = await db.InvoiceTemplates.FirstOrDefaultAsync(t => t.TInvoiceCode == code);
+        if (tpl == null) return new(false, $"Không tìm thấy mẫu số hóa đơn {code}.", inv);
+        if (!tpl.FlagActive) return new(false, "Mẫu số hóa đơn đã ngừng hiệu lực.", inv);
+
+        var date = invoiceDateUtc.Date;
+        if (date == default) return new(false, "Cần ngày hóa đơn (InvoiceDateUTC).", inv);
+        if (tpl.LastInvoiceDateUTC.HasValue && date < tpl.LastInvoiceDateUTC.Value.Date)
+            return new(false, $"Ngày hóa đơn phải >= ngày cấp số gần nhất ({tpl.LastInvoiceDateUTC.Value:dd/MM/yyyy}).", inv);
+        if (date < tpl.EffDateStart.Date)
+            return new(false, $"Ngày hóa đơn phải >= ngày hiệu lực mẫu ({tpl.EffDateStart:dd/MM/yyyy}).", inv);
+        if (date > DateTime.Now.Date)
+            return new(false, "Ngày hóa đơn không được ở tương lai.", inv);
+
+        // Số HĐ kế tiếp = StartInvoiceNo + QtyUsed (port từ AllocatedInvX).
+        var nextNo = tpl.StartInvoiceNo + tpl.QtyUsed;
+        if (nextNo < tpl.StartInvoiceNo || nextNo > tpl.EndInvoiceNo)
+            return new(false, $"Dải số đã hết (Start={tpl.StartInvoiceNo}, End={tpl.EndInvoiceNo}, đã dùng={tpl.QtyUsed}).", inv);
+
+        var invoiceNo = nextNo.ToString("D7");
+        tpl.QtyUsed += 1;
+        tpl.LastInvoiceNo = invoiceNo;
+        tpl.LastInvoiceDateUTC = date;
+
+        inv.TInvoiceCode = code;
+        inv.InvoiceNo = invoiceNo;
+        inv.InvoiceDateUTC = date;
+        inv.InvoiceNoBy = string.IsNullOrWhiteSpace(allocateBy) ? "system" : allocateBy.Trim();
+        inv.InvoiceNoDTimeUTC = DateTime.UtcNow;
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, $"Đã cấp số hóa đơn {invoiceNo}.", inv);
+    }
+
+    public Task<List<InvoiceTemplate>> TemplatesAsync() =>
+        db.InvoiceTemplates.OrderBy(t => t.TInvoiceCode).ToListAsync();
 
     // Phát hành hóa đơn (port từ InBrand Invoice_Invoice_IssuedXMulti / WAS_Invoice_Invoice_Issued).
     // Quy tắc InBrand:

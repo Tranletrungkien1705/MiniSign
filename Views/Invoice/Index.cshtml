@@ -4,6 +4,7 @@
     var certs = ViewBag.Certs as List<Certificate> ?? new();
     var dash = ViewBag.Dash as InvoiceDash;
     var life = ViewBag.Lifecycle as InvoiceLifecycleDash;
+    var templates = ViewBag.Templates as List<InvoiceTemplate> ?? new();
     var cur = ViewBag.Status as int?;
     string Badge(SignStatus s) => s switch
     {
@@ -74,7 +75,7 @@
             @foreach (var i in Model)
             {
                 <tr>
-                    <td class="fw-semibold mono">@i.InvoiceCode@if (!string.IsNullOrEmpty(i.InvoiceNo)) { <div class="text-muted mono" style="font-size:11px">Số HĐ: @i.InvoiceNo</div> }</td>
+                    <td class="fw-semibold mono">@i.InvoiceCode@if (!string.IsNullOrEmpty(i.InvoiceNo)) { <div class="text-muted mono" style="font-size:11px">Số HĐ: @i.InvoiceNo</div> }@if (i.InvoiceDateUTC != null) { <div class="text-muted" style="font-size:11px">Ngày HĐ: @i.InvoiceDateUTC.Value.ToString("dd/MM/yyyy")</div> }</td>
                     <td class="small">@i.CustomerName<div class="text-muted mono" style="font-size:11px">MST @i.TaxCode</div></td>
                     <td class="text-end small">@i.TotalValPmt.ToString("N0")</td>
                     <td><span class="badge bg-@LifeBadge(i.Status)">@LifeLabel(i.Status)</span>
@@ -99,6 +100,26 @@
                         else if (i.SignStatus == SignStatus.Signed)
                         {
                             <span class="text-success small"><i class="bi bi-patch-check-fill"></i> @i.SignSerial</span>
+                        }
+                        @if (i.Status == InvoiceStatus.Pending && string.IsNullOrEmpty(i.InvoiceNo) && templates.Count > 0)
+                        {
+                            <button class="btn btn-sm btn-outline-primary ms-1" data-bs-toggle="modal" data-bs-target="#alloc-@i.Id"><i class="bi bi-123"></i> Cấp số</button>
+                            <div class="modal fade" id="alloc-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                <form asp-action="Allocate" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Cấp số hóa đơn @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="mb-2"><label class="form-label small text-muted">Mẫu số hóa đơn *</label>
+                                            <select name="tInvoiceCode" class="form-select mono" required>
+                                                @foreach (var t in templates) { <option value="@t.TInvoiceCode">@t.TInvoiceCode — @t.InvoiceSerial (còn @t.QtyRemain số)</option> }
+                                            </select></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Ngày hóa đơn *</label><input name="invoiceDateUtc" type="date" class="form-control" value="@DateTime.Today.ToString("yyyy-MM-dd")" required /></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Người cấp số</label><input name="allocateBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                        <div class="small text-muted">Số HĐ kế tiếp = StartInvoiceNo + QtyUsed; ngày HĐ phải &gt;= ngày cấp gần nhất và không ở tương lai (port từ InBrand <span class="mono">Invoice_Invoice_AllocatedInvX</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-primary btn-sm">Xác nhận cấp số</button></div>
+                                </form>
+                            </div></div></div>
                         }
                         @if (i.Status == InvoiceStatus.Pending)
                         {

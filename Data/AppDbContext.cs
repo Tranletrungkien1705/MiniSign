@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<SignLog> SignLogs => Set<SignLog>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceTemplate> InvoiceTemplates => Set<InvoiceTemplate>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -32,6 +33,12 @@ public class AppDbContext : DbContext
         b.Entity<Invoice>(e =>
         {
             e.HasIndex(x => new { x.OrgId, x.InvoiceCode }).IsUnique();
+            e.HasQueryFilter(x => x.OrgId == _orgId);
+        });
+        b.Entity<InvoiceTemplate>(e =>
+        {
+            e.HasIndex(x => new { x.OrgId, x.TInvoiceCode }).IsUnique();
+            e.Ignore(x => x.QtyRemain);
             e.HasQueryFilter(x => x.OrgId == _orgId);
         });
     }
