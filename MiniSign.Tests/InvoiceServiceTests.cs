@@ -166,6 +166,73 @@ public class InvoiceServiceTests
         }
     }
 
+    // Duyệt hóa đơn (port từ InBrand Invoice_Invoice_ApprovedMultiX): PENDING + có InvoiceNo mới duyệt được.
+    [Fact]
+    public async Task Approve_PendingWithInvoiceNo_BecomesApproved()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "0101234567", "Cty ABC", "Nội dung", 1000m);
+            var r = await inv.ApproveAsync(c.invoice!.Id, "00000001", "ketoan01");
+            Assert.True(r.ok);
+            Assert.Equal(InvoiceStatus.Approved, r.invoice!.Status);
+            Assert.Equal("00000001", r.invoice.InvoiceNo);
+            Assert.Equal("ketoan01", r.invoice.ApprBy);
+            Assert.NotNull(r.invoice.ApprDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task Approve_WithoutInvoiceNo_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.ApproveAsync(c.invoice!.Id, "  ", "u1");
+            Assert.False(r.ok);   // thiếu số hóa đơn
+            Assert.Equal(InvoiceStatus.Pending, r.invoice!.Status);
+        }
+    }
+
+    [Fact]
+    public async Task Approve_AlreadyApproved_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.ApproveAsync(c.invoice!.Id, "00000001", "u1");
+            var r = await inv.ApproveAsync(c.invoice.Id, "00000002", "u1");
+            Assert.False(r.ok);   // đã duyệt → không duyệt lại
+        }
+    }
+
+    // Phát hành hóa đơn (port từ InBrand Invoice_Invoice_IssuedXMulti): chỉ APPROVED mới phát hành được.
+    [Fact]
+    public async Task Issue_Approved_BecomesIssued()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.ApproveAsync(c.invoice!.Id, "00000001", "u1");
+            var r = await inv.IssueAsync(c.invoice.Id, "ketoan01");
+            Assert.True(r.ok);
+            Assert.Equal(InvoiceStatus.Issued, r.invoice!.Status);
+            Assert.Equal("ketoan01", r.invoice.IssuedBy);
+            Assert.NotNull(r.invoice.IssuedDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task Issue_Pending_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.IssueAsync(c.invoice!.Id, "u1");
+            Assert.False(r.ok);   // chưa duyệt → không phát hành được
+        }
+    }
+
     [Fact]
     public async Task LifecycleDashboard_CountsByStatus()
     {

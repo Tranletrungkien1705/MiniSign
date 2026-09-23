@@ -83,6 +83,14 @@ public class Invoice : IOrgOwned
     public DateTime? CancelDTimeUTC { get; set; }         // Thời gian hủy (port từ Invoice_Invoice.CancelDTimeUTC)
     public string? CancelReason { get; set; }             // Lý do hủy (port từ Invoice_Invoice.Remark)
 
+    // Số hóa đơn (InvoiceNo) — bắt buộc phải có trước khi DUYỆT.
+    // Port từ InBrand Invoice_Invoice_ApprovedMultiX: "InvoiceNoIsNotNull" (không được rỗng khi duyệt).
+    public string? InvoiceNo { get; set; }
+    public string? ApprBy { get; set; }                   // Người duyệt (port từ Invoice_Invoice.ApprBy)
+    public DateTime? ApprDTimeUTC { get; set; }           // Thời gian duyệt (port từ Invoice_Invoice.ApprDTimeUTC)
+    public string? IssuedBy { get; set; }                 // Người phát hành (port từ Invoice_Invoice.IssuedBy)
+    public DateTime? IssuedDTimeUTC { get; set; }         // Thời gian phát hành (port từ Invoice_Invoice.IssuedDTimeUTC)
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

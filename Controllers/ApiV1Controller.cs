@@ -134,6 +134,22 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg });
     }
 
+    // Duyệt hóa đơn (port từ InBrand Invoice_Invoice_ApprovedMultiX). Chỉ duyệt khi PENDING + có InvoiceNo.
+    [HttpPost("invoices/{id:int}/approve")]
+    public async Task<IActionResult> ApproveInvoice(int id, [FromBody] InvoiceApproveReq r)
+    {
+        var res = await invoices.ApproveAsync(id, r.InvoiceNo ?? "", r.ApprBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
+    // Phát hành hóa đơn (port từ InBrand Invoice_Invoice_IssuedXMulti). Chỉ phát hành khi APPROVED.
+    [HttpPost("invoices/{id:int}/issue")]
+    public async Task<IActionResult> IssueInvoice(int id, [FromBody] InvoiceIssueReq r)
+    {
+        var res = await invoices.IssueAsync(id, r.IssuedBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
     // Hủy hóa đơn (port từ InBrand Invoice_Invoice_Cancel). Chỉ hủy khi PENDING/APPROVED.
     [HttpPost("invoices/{id:int}/cancel")]
     public async Task<IActionResult> CancelInvoice(int id, [FromBody] InvoiceCancelReq r)
@@ -156,6 +172,7 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         status = (int)i.SignStatus, statusText = i.SignStatus.ToString(),
         lifecycle = (int)i.Status, lifecycleText = i.Status.ToString(),
         i.SignBy, i.SignDTimeUTC, i.SignSerial, i.SignError,
+        i.InvoiceNo, i.ApprBy, i.ApprDTimeUTC, i.IssuedBy, i.IssuedDTimeUTC,
         i.CancelBy, i.CancelDTimeUTC, i.CancelReason, i.CreatedAt, i.UpdatedAt
     };
 }
@@ -170,3 +187,5 @@ public class InvoiceReq { public string? InvoiceCode { get; set; } public string
 public class InvoiceSignReq { public int CertId { get; set; } public string? SignBy { get; set; } }
 public class InvoiceStatusReq { public int Status { get; set; } public string? Error { get; set; } }
 public class InvoiceCancelReq { public string? Reason { get; set; } public string? CancelBy { get; set; } }
+public class InvoiceApproveReq { public string? InvoiceNo { get; set; } public string? ApprBy { get; set; } }
+public class InvoiceIssueReq { public string? IssuedBy { get; set; } }

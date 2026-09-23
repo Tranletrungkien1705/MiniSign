@@ -66,6 +66,11 @@ public static class Seeder
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CancelBy\" text NULL");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CancelDTimeUTC\" timestamp NULL");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CancelReason\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"InvoiceNo\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ApprBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ApprDTimeUTC\" timestamp NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"IssuedBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"IssuedDTimeUTC\" timestamp NULL");
         foreach (var s in sql) try { await db.Database.ExecuteSqlRawAsync(s); } catch { }
     }
 }

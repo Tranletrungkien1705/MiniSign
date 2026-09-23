@@ -129,6 +129,24 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
         return RedirectToAction(nameof(Index));
     }
 
+    // Duyệt hóa đơn (port từ InBrand Invoice_Invoice_ApprovedMultiX).
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Approve(int id, string? invoiceNo, string? apprBy)
+    {
+        var r = await invoices.ApproveAsync(id, invoiceNo ?? "", apprBy ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+
+    // Phát hành hóa đơn (port từ InBrand Invoice_Invoice_IssuedXMulti).
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Issue(int id, string? issuedBy)
+    {
+        var r = await invoices.IssueAsync(id, issuedBy ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+
     // Hủy hóa đơn (port từ InBrand Invoice_Invoice_Cancel).
     [HttpPost, ValidateAntiForgeryToken]
     public async Task<IActionResult> Cancel(int id, string? reason, string? cancelBy)

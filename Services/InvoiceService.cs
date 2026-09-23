@@ -26,6 +26,8 @@ public interface IInvoiceService
     Task<InvoiceResult> CreateAsync(string invoiceCode, string taxCode, string customerName, string content, decimal totalValPmt);
     Task<InvoiceResult> SignAsync(int id, int certId, string signBy);
     Task<InvoiceResult> SetStatusAsync(int id, SignStatus status, string? error);
+    Task<InvoiceResult> ApproveAsync(int id, string invoiceNo, string apprBy);
+    Task<InvoiceResult> IssueAsync(int id, string issuedBy);
     Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy);
     Task<InvoiceDash> DashboardAsync();
     Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
@@ -124,6 +126,50 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         await db.Invoices.CountAsync(i => i.SignStatus == SignStatus.Processing),
         await db.Invoices.CountAsync(i => i.SignStatus == SignStatus.Signed),
         await db.Invoices.CountAsync(i => i.SignStatus == SignStatus.Failed));
+
+    // Duyệt hóa đơn (port từ InBrand Invoice_Invoice_ApprovedMultiX / WAS_Invoice_Invoice_Approved).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái PENDING (Invoice_Invoice_CheckDB với InvoiceStatus.Pending).
+    //  - Số hóa đơn (InvoiceNo) không được rỗng (lỗi Invoice_Invoice_ApprovedMultiX_InvoiceNoIsNotNull).
+    //  - Khi duyệt ghi InvoiceStatus = APPROVED + người duyệt (ApprBy) + thời gian duyệt (ApprDTimeUTC).
+    public async Task<InvoiceResult> ApproveAsync(int id, string invoiceNo, string apprBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Pending)
+            return new(false, "Chỉ được duyệt hóa đơn ở trạng thái PENDING.", inv);
+
+        var no = (invoiceNo ?? "").Trim();
+        if (no.Length == 0)
+            return new(false, "Cần số hóa đơn (InvoiceNo) trước khi duyệt.", inv);
+
+        inv.InvoiceNo = no;
+        inv.Status = InvoiceStatus.Approved;
+        inv.ApprBy = string.IsNullOrWhiteSpace(apprBy) ? "system" : apprBy.Trim();
+        inv.ApprDTimeUTC = DateTime.UtcNow;
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, "Đã duyệt hóa đơn.", inv);
+    }
+
+    // Phát hành hóa đơn (port từ InBrand Invoice_Invoice_IssuedXMulti / WAS_Invoice_Invoice_Issued).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái APPROVED (Invoice_Invoice_CheckDB với InvoiceStatus.Approved).
+    //  - Khi phát hành ghi InvoiceStatus = ISSUED + người phát hành (IssuedBy) + thời gian phát hành (IssuedDTimeUTC).
+    public async Task<InvoiceResult> IssueAsync(int id, string issuedBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Approved)
+            return new(false, "Chỉ được phát hành hóa đơn ở trạng thái APPROVED.", inv);
+
+        inv.Status = InvoiceStatus.Issued;
+        inv.IssuedBy = string.IsNullOrWhiteSpace(issuedBy) ? "system" : issuedBy.Trim();
+        inv.IssuedDTimeUTC = DateTime.UtcNow;
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, "Đã phát hành hóa đơn.", inv);
+    }
 
     // Hủy hóa đơn (port từ InBrand Invoice_Invoice_Cancel / Invoice_Invoice_CancelX_New20190705).
     // Quy tắc InBrand: hóa đơn phải tồn tại và đang ở trạng thái PENDING hoặc APPROVED mới được hủy;

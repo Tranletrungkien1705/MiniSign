@@ -71,7 +71,7 @@
             @foreach (var i in Model)
             {
                 <tr>
-                    <td class="fw-semibold mono">@i.InvoiceCode</td>
+                    <td class="fw-semibold mono">@i.InvoiceCode@if (!string.IsNullOrEmpty(i.InvoiceNo)) { <div class="text-muted mono" style="font-size:11px">Số HĐ: @i.InvoiceNo</div> }</td>
                     <td class="small">@i.CustomerName<div class="text-muted mono" style="font-size:11px">MST @i.TaxCode</div></td>
                     <td class="text-end small">@i.TotalValPmt.ToString("N0")</td>
                     <td><span class="badge bg-@LifeBadge(i.Status)">@LifeLabel(i.Status)</span>
@@ -95,6 +95,37 @@
                         else if (i.SignStatus == SignStatus.Signed)
                         {
                             <span class="text-success small"><i class="bi bi-patch-check-fill"></i> @i.SignSerial</span>
+                        }
+                        @if (i.Status == InvoiceStatus.Pending)
+                        {
+                            <button class="btn btn-sm btn-outline-info ms-1" data-bs-toggle="modal" data-bs-target="#approve-@i.Id"><i class="bi bi-check2-square"></i> Duyệt</button>
+                            <div class="modal fade" id="approve-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                <form asp-action="Approve" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Duyệt hóa đơn @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="mb-2"><label class="form-label small text-muted">Số hóa đơn (InvoiceNo) *</label><input name="invoiceNo" class="form-control mono" placeholder="VD: 00000001" required /></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Người duyệt</label><input name="apprBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                        <div class="small text-muted">Chỉ duyệt được khi hóa đơn ở trạng thái PENDING và đã có số hóa đơn (port từ InBrand <span class="mono">Invoice_Invoice_ApprovedMultiX</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-info btn-sm">Xác nhận duyệt</button></div>
+                                </form>
+                            </div></div></div>
+                        }
+                        @if (i.Status == InvoiceStatus.Approved)
+                        {
+                            <button class="btn btn-sm btn-outline-success ms-1" data-bs-toggle="modal" data-bs-target="#issue-@i.Id"><i class="bi bi-send-check"></i> Phát hành</button>
+                            <div class="modal fade" id="issue-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                <form asp-action="Issue" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Phát hành hóa đơn @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="mb-2"><label class="form-label small text-muted">Người phát hành</label><input name="issuedBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                        <div class="small text-muted">Chỉ phát hành được khi hóa đơn ở trạng thái APPROVED (port từ InBrand <span class="mono">Invoice_Invoice_IssuedXMulti</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-success btn-sm">Xác nhận phát hành</button></div>
+                                </form>
+                            </div></div></div>
                         }
                         @if (i.Status == InvoiceStatus.Pending || i.Status == InvoiceStatus.Approved)
                         {
