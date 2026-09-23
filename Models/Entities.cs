@@ -204,6 +204,7 @@ public class InvoiceLine : IOrgOwned
     public int InvoiceId { get; set; }
     public Invoice? Invoice { get; set; }
     public int Idx { get; set; }                          // Thứ tự dòng (port từ Invoice_InvoiceDtl.Idx)
+    public string? ProductID { get; set; }                // Mã sản phẩm (port từ Invoice_InvoiceDtl.ProductID) — dùng để kiểm tra trùng
     public string SpecCode { get; set; } = "";            // Mã hàng hóa/dịch vụ (port từ Invoice_InvoiceDtl.SpecCode)
     public string SpecName { get; set; } = "";            // Tên hàng hóa/dịch vụ (port từ Invoice_InvoiceDtl.SpecName)
     public decimal Qty { get; set; }                      // Số lượng (port từ Invoice_InvoiceDtl.Qty)
@@ -300,3 +301,20 @@ public record InvoiceTotalCheck(
     decimal inputTotalValPmt = 0,      // tổng thanh toán đã khai báo
     decimal delta = 0,                 // dung sai cho phép
     int lineCount = 0);                // số dòng chi tiết đã dùng để tính
+// Kết quả KIỂM TRA HÓA ĐƠN TRƯỚC KHI LƯU (port từ InBrand Invoice_Invoice_Calc).
+// Tập hợp các quy tắc kiểm tra hợp lệ của hóa đơn trước khi ghi nhận:
+//  - InvoiceCode không được rỗng (Invoice_Invoice_Calc_InvalidInvoiceCode).
+//  - Hóa đơn phải đang ở trạng thái PENDING (Invoice_Invoice_Calc_StatusNotMatched).
+//  - Nếu là thao tác XÓA: hóa đơn CHƯA được cấp số (InvoiceNo còn rỗng)
+//    (Invoice_Invoice_Calc_ExistInvoiceNo).
+//  - Phải có ít nhất 1 dòng chi tiết (Invoice_Invoice_Calc_Input_InvoiceDtlTblNotFound/Invalid).
+//  - ProductID không được trùng trong cùng hóa đơn
+//    (Invoice_Invoice_Calc_Input_InvoiceDtl_ProductIDDuplicate).
+//  - SpecCode không được trùng trong cùng hóa đơn khi dòng không có ProductID
+//    (Invoice_Invoice_Calc_Input_InvoiceDtl_SpecCodeDuplicate).
+// ok = true khi mọi quy tắc đều đạt; errors liệt kê mã lỗi vi phạm.
+public record InvoiceCalcResult(
+    bool ok,                 // hóa đơn hợp lệ để lưu
+    string message,          // thông điệp kết luận
+    List<string> errors,     // danh sách mã lỗi vi phạm (rỗng khi ok)
+    int lineCount = 0);      // số dòng chi tiết đã kiểm tra

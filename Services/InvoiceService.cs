@@ -64,6 +64,7 @@ public interface IInvoiceService
     Task<List<InvoiceLine>> LinesAsync(int invoiceId);
     Task<InvoiceResult> AddLineAsync(int invoiceId, InvoiceLineReq req);
     Task<InvoiceTotalCheck> CheckTotalAsync(int invoiceId, VatType vatType);
+    Task<InvoiceCalcResult> CalcAsync(int invoiceId, bool isDelete);
     Task<InvoiceDash> DashboardAsync();
     Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
 }
@@ -595,6 +596,62 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
             : $"Tổng tiền KHÔNG khớp: khai báo {inputPmt:N0} vs tính lại {calcPmt:N0} (dung sai {delta:N0}).";
 
         return new(ok, msg, vatType, calcInvoice, calcVat, calcPmt, inputInvoice, inputVat, inputPmt, delta, lines.Count);
+    }
+    // KIỂM TRA HÓA ĐƠN TRƯỚC KHI LƯU (port từ InBrand Invoice_Invoice_Calc / Invoice_Invoice_CalcX).
+    // Tập hợp các quy tắc hợp lệ (chỉ các nhánh đang bật trong InBrand):
+    //  1. InvoiceCode không rỗng (Invoice_Invoice_Calc_InvalidInvoiceCode).
+    //  2. Hóa đơn phải ở trạng thái PENDING (Invoice_Invoice_Calc_StatusNotMatched).
+    //  3. Nếu isDelete: hóa đơn CHƯA được cấp số — InvoiceNo rỗng
+    //     (Invoice_Invoice_Calc_ExistInvoiceNo).
+    //  4. Phải có >= 1 dòng chi tiết (Invoice_Invoice_Calc_Input_InvoiceDtlTblNotFound/Invalid).
+    //  5. ProductID không trùng trong cùng hóa đơn
+    //     (Invoice_Invoice_Calc_Input_InvoiceDtl_ProductIDDuplicate).
+    //  6. SpecCode không trùng trong cùng hóa đơn khi dòng không có ProductID
+    //     (Invoice_Invoice_Calc_Input_InvoiceDtl_SpecCodeDuplicate).
+    public async Task<InvoiceCalcResult> CalcAsync(int invoiceId, bool isDelete)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (inv == null)
+            return new(false, "Không tìm thấy hóa đơn.", new List<string> { "Invoice_Invoice_Calc_Input_InvoiceTblNotFound" });
+        var errors = new List<string>();
+        // 1. InvoiceCode không rỗng.
+        if (string.IsNullOrWhiteSpace(inv.InvoiceCode))
+            errors.Add("Invoice_Invoice_Calc_InvalidInvoiceCode");
+        // 2. Trạng thái phải là PENDING (trừ khi xóa — InBrand bỏ qua khi bIsDelete).
+        if (!isDelete && inv.Status != InvoiceStatus.Pending)
+            errors.Add("Invoice_Invoice_Calc_StatusNotMatched");
+        // 3. Đã cấp số thì không được xóa.
+        if (isDelete && !string.IsNullOrEmpty(inv.InvoiceNo))
+            errors.Add("Invoice_Invoice_Calc_ExistInvoiceNo");
+        var lines = await db.InvoiceLines.Where(l => l.InvoiceId == invoiceId).ToListAsync();
+        // 4. Phải có ít nhất 1 dòng chi tiết (chỉ kiểm tra khi không xóa).
+        if (!isDelete)
+        {
+            if (lines.Count < 1)
+                errors.Add("Invoice_Invoice_Calc_Input_InvoiceDtlTblNotFound");
+            else
+            {
+                // 5. ProductID không trùng trong cùng hóa đơn.
+                var dupProduct = lines
+                    .Where(l => !string.IsNullOrWhiteSpace(l.ProductID))
+                    .GroupBy(l => l.ProductID!.Trim())
+                    .FirstOrDefault(g => g.Count() > 1);
+                if (dupProduct != null)
+                    errors.Add("Invoice_Invoice_Calc_Input_InvoiceDtl_ProductIDDuplicate");
+                // 6. SpecCode không trùng khi dòng không có ProductID.
+                var dupSpec = lines
+                    .Where(l => string.IsNullOrWhiteSpace(l.ProductID) && !string.IsNullOrWhiteSpace(l.SpecCode))
+                    .GroupBy(l => l.SpecCode.Trim())
+                    .FirstOrDefault(g => g.Count() > 1);
+                if (dupSpec != null)
+                    errors.Add("Invoice_Invoice_Calc_Input_InvoiceDtl_SpecCodeDuplicate");
+            }
+        }
+        var ok = errors.Count == 0;
+        var msg = ok
+            ? $"Hóa đơn {inv.InvoiceCode} hợp lệ ({lines.Count} dòng chi tiết)."
+            : $"Hóa đơn {inv.InvoiceCode} KHÔNG hợp lệ: {string.Join(", ", errors)}.";
+        return new(ok, msg, errors, lines.Count);
     }
 
     private static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

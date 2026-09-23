@@ -244,6 +244,15 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ILicens
         var d = await invoices.LifecycleDashboardAsync();
         return Ok(new { d.Total, d.Pending, d.Approved, d.Issued, d.Canceled, d.Deleted });
     }
+    // Kiểm tra hóa đơn trước khi lưu (port từ InBrand Invoice_Invoice_Calc).
+    // Trả về ok + danh sách mã lỗi vi phạm (InvoiceCode rỗng, trạng thái không PENDING,
+    // đã cấp số khi xóa, thiếu dòng chi tiết, ProductID/SpecCode trùng).
+    [HttpPost("invoices/{id:int}/calc")]
+    public async Task<IActionResult> CalcInvoice(int id, [FromBody] InvoiceCalcReq? r)
+    {
+        var res = await invoices.CalcAsync(id, r?.IsDelete ?? false);
+        return Ok(new { res.ok, res.message, res.errors, res.lineCount });
+    }
 
     // ===== Hạn mức cấp số hóa đơn theo MST (port từ InBrand Invoice_license) =====
 
@@ -321,6 +330,7 @@ public class InvoiceAllocateReq { public string? TInvoiceCode { get; set; } publ
 public class InvoiceIssueReq { public string? IssuedBy { get; set; } }
 public class InvoiceMailSentReq { public string? SendBy { get; set; } }
 public class InvoicePushOutSiteReq { public string? PushBy { get; set; } }
+public class InvoiceCalcReq { public bool IsDelete { get; set; } }
 public class InvoiceUpdateBody
 {
     public string? PaymentMethodCode { get; set; }

@@ -230,6 +230,14 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
         TempData[r.ok ? "Success" : "Error"] = r.msg;
         return RedirectToAction(nameof(Index));
     }
+    // Kiểm tra hóa đơn trước khi lưu (port từ InBrand Invoice_Invoice_Calc).
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Calc(int id, bool isDelete)
+    {
+        var r = await invoices.CalcAsync(id, isDelete);
+        TempData[r.ok ? "Success" : "Error"] = r.message;
+        return RedirectToAction(nameof(Index));
+    }
 }
 
 // Hạn mức cấp số hóa đơn theo MST (port từ InBrand Invoice_license).
