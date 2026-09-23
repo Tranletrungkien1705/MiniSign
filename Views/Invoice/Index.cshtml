@@ -24,6 +24,7 @@
         InvoiceStatus.Issued => "success",
         InvoiceStatus.Approved => "info",
         InvoiceStatus.Canceled => "danger",
+        InvoiceStatus.Deleted => "dark",
         _ => "secondary"
     };
     string LifeLabel(InvoiceStatus s) => s switch
@@ -31,6 +32,7 @@
         InvoiceStatus.Issued => "Đã phát hành",
         InvoiceStatus.Approved => "Đã duyệt",
         InvoiceStatus.Canceled => "Đã hủy",
+        InvoiceStatus.Deleted => "Đã xóa",
         _ => "Chờ xử lý"
     };
 }
@@ -52,6 +54,7 @@
         <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Đã duyệt</div><div class="stat-num text-info">@life.Approved</div></div></div></div>
         <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Đã phát hành</div><div class="stat-num text-success">@life.Issued</div></div></div></div>
         <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Đã hủy</div><div class="stat-num text-danger">@life.Canceled</div></div></div></div>
+        <div class="col"><div class="card"><div class="card-body py-3"><div class="text-muted small">Đã xóa</div><div class="stat-num text-dark">@life.Deleted</div></div></div></div>
     </div>
 }
 <div class="row g-3">
@@ -76,6 +79,7 @@
                     <td class="text-end small">@i.TotalValPmt.ToString("N0")</td>
                     <td><span class="badge bg-@LifeBadge(i.Status)">@LifeLabel(i.Status)</span>
                         @if (i.Status == InvoiceStatus.Canceled && !string.IsNullOrEmpty(i.CancelReason)) { <div class="text-danger" style="font-size:11px">@i.CancelReason</div> }
+                        @if (i.Status == InvoiceStatus.Deleted && !string.IsNullOrEmpty(i.DeleteReason)) { <div class="text-muted" style="font-size:11px">@i.DeleteReason</div> }
                     </td>
                     <td><span class="badge bg-@Badge(i.SignStatus)">@Label(i.SignStatus)</span>
                         @if (i.SignStatus == SignStatus.Failed && !string.IsNullOrEmpty(i.SignError)) { <div class="text-danger" style="font-size:11px">@i.SignError</div> }
@@ -140,6 +144,23 @@
                                         <div class="small text-muted">Chỉ hủy được khi hóa đơn ở trạng thái PENDING/APPROVED (port từ InBrand <span class="mono">Invoice_Invoice_Cancel</span>).</div>
                                     </div>
                                     <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-danger btn-sm">Xác nhận hủy</button></div>
+                                </form>
+                            </div></div></div>
+                        }
+                        @if (i.Status == InvoiceStatus.Issued)
+                        {
+                            <button class="btn btn-sm btn-outline-dark ms-1" data-bs-toggle="modal" data-bs-target="#delete-@i.Id"><i class="bi bi-trash"></i> Xóa</button>
+                            <div class="modal fade" id="delete-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                <form asp-action="Delete" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Xóa hóa đơn @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="mb-2"><label class="form-label small text-muted">Lý do xóa</label><input name="reason" class="form-control" placeholder="VD: hóa đơn sai, đã thay thế" /></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Người xóa</label><input name="deleteBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">File đính kèm (tùy chọn)</label><input name="attachedDelFilePath" class="form-control mono" placeholder="VD: /UploadedFiles/Inv_IVID/xxx.pdf" /></div>
+                                        <div class="small text-muted">Chỉ xóa được khi hóa đơn ở trạng thái ISSUED (đã phát hành); đã DELETED thì bỏ qua (port từ InBrand <span class="mono">Invoice_Invoice_Deleted</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-dark btn-sm">Xác nhận xóa</button></div>
                                 </form>
                             </div></div></div>
                         }

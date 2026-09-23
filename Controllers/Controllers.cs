@@ -155,6 +155,15 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
         TempData[r.ok ? "Success" : "Error"] = r.msg;
         return RedirectToAction(nameof(Index));
     }
+
+    // Xóa hóa đơn (port từ InBrand Invoice_Invoice_Deleted). Chỉ xóa khi ISSUED.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(int id, string? reason, string? deleteBy, string? attachedDelFilePath)
+    {
+        var r = await invoices.DeleteAsync(id, reason ?? "", deleteBy ?? "", attachedDelFilePath);
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
 }
 
 public class OrgController(AppDbContext db) : Controller

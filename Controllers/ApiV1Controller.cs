@@ -158,12 +158,20 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
     }
 
+    // Xóa hóa đơn (port từ InBrand Invoice_Invoice_Deleted). Chỉ xóa khi ISSUED; đã DELETED thì bỏ qua.
+    [HttpPost("invoices/{id:int}/delete")]
+    public async Task<IActionResult> DeleteInvoice(int id, [FromBody] InvoiceDeleteReq r)
+    {
+        var res = await invoices.DeleteAsync(id, r.Reason ?? "", r.DeleteBy ?? "", r.AttachedDelFilePath);
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
     // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
     [HttpGet("invoices/lifecycle")]
     public async Task<IActionResult> InvoiceLifecycle()
     {
         var d = await invoices.LifecycleDashboardAsync();
-        return Ok(new { d.Total, d.Pending, d.Approved, d.Issued, d.Canceled });
+        return Ok(new { d.Total, d.Pending, d.Approved, d.Issued, d.Canceled, d.Deleted });
     }
 
     private static object InvDto(Invoice i) => new
@@ -173,7 +181,8 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         lifecycle = (int)i.Status, lifecycleText = i.Status.ToString(),
         i.SignBy, i.SignDTimeUTC, i.SignSerial, i.SignError,
         i.InvoiceNo, i.ApprBy, i.ApprDTimeUTC, i.IssuedBy, i.IssuedDTimeUTC,
-        i.CancelBy, i.CancelDTimeUTC, i.CancelReason, i.CreatedAt, i.UpdatedAt
+        i.CancelBy, i.CancelDTimeUTC, i.CancelReason,
+        i.DeleteBy, i.DeleteDTimeUTC, i.DeleteReason, i.AttachedDelFilePath, i.CreatedAt, i.UpdatedAt
     };
 }
 
@@ -187,5 +196,6 @@ public class InvoiceReq { public string? InvoiceCode { get; set; } public string
 public class InvoiceSignReq { public int CertId { get; set; } public string? SignBy { get; set; } }
 public class InvoiceStatusReq { public int Status { get; set; } public string? Error { get; set; } }
 public class InvoiceCancelReq { public string? Reason { get; set; } public string? CancelBy { get; set; } }
+public class InvoiceDeleteReq { public string? Reason { get; set; } public string? DeleteBy { get; set; } public string? AttachedDelFilePath { get; set; } }
 public class InvoiceApproveReq { public string? InvoiceNo { get; set; } public string? ApprBy { get; set; } }
 public class InvoiceIssueReq { public string? IssuedBy { get; set; } }

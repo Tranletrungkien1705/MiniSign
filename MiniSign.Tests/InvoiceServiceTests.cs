@@ -247,4 +247,50 @@ public class InvoiceServiceTests
             Assert.Equal(1, d.Canceled);
         }
     }
+
+    // Xóa hóa đơn (port từ InBrand Invoice_Invoice_Deleted): chỉ ISSUED mới được xóa.
+    [Fact]
+    public async Task Delete_Issued_BecomesDeleted()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "0101234567", "Cty ABC", "Nội dung", 1000m);
+            await inv.ApproveAsync(c.invoice!.Id, "00000001", "u1");
+            await inv.IssueAsync(c.invoice.Id, "u1");
+            var r = await inv.DeleteAsync(c.invoice.Id, "hóa đơn sai", "ketoan01", "/UploadedFiles/Inv_IVID/x.pdf");
+            Assert.True(r.ok);
+            Assert.Equal(InvoiceStatus.Deleted, r.invoice!.Status);
+            Assert.Equal("ketoan01", r.invoice.DeleteBy);
+            Assert.Equal("hóa đơn sai", r.invoice.DeleteReason);
+            Assert.Equal("/UploadedFiles/Inv_IVID/x.pdf", r.invoice.AttachedDelFilePath);
+            Assert.NotNull(r.invoice.DeleteDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_Pending_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.DeleteAsync(c.invoice!.Id, "lý do", "u1", null);
+            Assert.False(r.ok);   // chưa phát hành → không xóa được
+            Assert.Equal(InvoiceStatus.Pending, r.invoice!.Status);
+        }
+    }
+
+    [Fact]
+    public async Task Delete_AlreadyDeleted_Idempotent()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.ApproveAsync(c.invoice!.Id, "00000001", "u1");
+            await inv.IssueAsync(c.invoice.Id, "u1");
+            await inv.DeleteAsync(c.invoice.Id, "lần 1", "u1", null);
+            var r = await inv.DeleteAsync(c.invoice.Id, "lần 2", "u1", null);
+            Assert.True(r.ok);   // đã DELETED → bỏ qua, không báo lỗi
+            Assert.Equal(InvoiceStatus.Deleted, r.invoice!.Status);
+        }
+    }
 }

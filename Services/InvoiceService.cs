@@ -11,7 +11,7 @@ public record InvoiceResult(bool ok, string msg, Invoice? invoice);
 public record InvoiceDash(int Total, int Pending, int Processing, int Signed, int Failed);
 
 // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
-public record InvoiceLifecycleDash(int Total, int Pending, int Approved, int Issued, int Canceled);
+public record InvoiceLifecycleDash(int Total, int Pending, int Approved, int Issued, int Canceled, int Deleted);
 
 // Nghiệp vụ ký hóa đơn/tài liệu theo vòng đời trạng thái.
 // Port từ InBrand OS_Invoice_InvoiceTemp + OS_Invoice_InvoiceTemp_UpdMultiSignStatus:
@@ -29,6 +29,7 @@ public interface IInvoiceService
     Task<InvoiceResult> ApproveAsync(int id, string invoiceNo, string apprBy);
     Task<InvoiceResult> IssueAsync(int id, string issuedBy);
     Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy);
+    Task<InvoiceResult> DeleteAsync(int id, string reason, string deleteBy, string? attachedDelFilePath);
     Task<InvoiceDash> DashboardAsync();
     Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
 }
@@ -190,10 +191,39 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         return new(true, "Đã hủy hóa đơn.", inv);
     }
 
+    // Xóa hóa đơn (port từ InBrand Invoice_Invoice_Deleted / Invoice_Invoice_DeletedX_New20190715).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái ISSUED (đã phát hành) mới được xóa.
+    //  - Nếu hóa đơn đã ở trạng thái DELETED thì bỏ qua (idempotent — không báo lỗi).
+    //  - Khi xóa ghi InvoiceStatus = DELETED + người xóa (DeleteBy) + thời gian xóa (DeleteDTimeUTC)
+    //    + lý do xóa (DeleteReason) + file đính kèm (AttachedDelFilePath).
+    public async Task<InvoiceResult> DeleteAsync(int id, string reason, string deleteBy, string? attachedDelFilePath)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+
+        // Đã xóa rồi → bỏ qua (idempotent, port từ nhánh "if InvoiceStatus != DELETED" của InBrand).
+        if (inv.Status == InvoiceStatus.Deleted)
+            return new(true, "Hóa đơn đã ở trạng thái DELETED.", inv);
+
+        if (inv.Status != InvoiceStatus.Issued)
+            return new(false, "Chỉ được xóa hóa đơn ở trạng thái ISSUED (đã phát hành).", inv);
+
+        inv.Status = InvoiceStatus.Deleted;
+        inv.DeleteReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        inv.DeleteBy = string.IsNullOrWhiteSpace(deleteBy) ? "system" : deleteBy.Trim();
+        inv.DeleteDTimeUTC = DateTime.UtcNow;
+        inv.AttachedDelFilePath = string.IsNullOrWhiteSpace(attachedDelFilePath) ? null : attachedDelFilePath.Trim();
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, "Đã xóa hóa đơn.", inv);
+    }
+
     public async Task<InvoiceLifecycleDash> LifecycleDashboardAsync() => new(
         await db.Invoices.CountAsync(),
         await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Pending),
         await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Approved),
         await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Issued),
-        await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Canceled));
+        await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Canceled),
+        await db.Invoices.CountAsync(i => i.Status == InvoiceStatus.Deleted));
 }

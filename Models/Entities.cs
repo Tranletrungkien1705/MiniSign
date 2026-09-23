@@ -15,7 +15,8 @@ public enum SignStatus { Pending = 0, Processing = 1, Signed = 2, Failed = 3 }
 // Vòng đời trạng thái HÓA ĐƠN (khác với trạng thái ký).
 // Port từ InBrand TConst.InvoiceStatus (PENDING/APPROVED/ISSUED/CANCELED/DELETED).
 // Quy tắc nghiệp vụ (Invoice_Invoice_CancelX): chỉ được HỦY khi hóa đơn đang ở PENDING hoặc APPROVED.
-public enum InvoiceStatus { Pending = 0, Approved = 1, Issued = 2, Canceled = 3 }
+// Quy tắc nghiệp vụ (Invoice_Invoice_DeletedX): chỉ được XÓA khi hóa đơn đang ở ISSUED.
+public enum InvoiceStatus { Pending = 0, Approved = 1, Issued = 2, Canceled = 3, Deleted = 4 }
 
 public class Org
 {
@@ -90,6 +91,13 @@ public class Invoice : IOrgOwned
     public DateTime? ApprDTimeUTC { get; set; }           // Thời gian duyệt (port từ Invoice_Invoice.ApprDTimeUTC)
     public string? IssuedBy { get; set; }                 // Người phát hành (port từ Invoice_Invoice.IssuedBy)
     public DateTime? IssuedDTimeUTC { get; set; }         // Thời gian phát hành (port từ Invoice_Invoice.IssuedDTimeUTC)
+
+    // Xóa hóa đơn (port từ InBrand Invoice_Invoice_DeletedX_New20190715).
+    // Quy tắc: chỉ xóa được hóa đơn đang ở trạng thái ISSUED; khi xóa ghi DELETED + người xóa + thời gian + lý do.
+    public string? DeleteBy { get; set; }                 // Người xóa (port từ Invoice_Invoice.DeleteBy)
+    public DateTime? DeleteDTimeUTC { get; set; }         // Thời gian xóa (port từ Invoice_Invoice.DeleteDTimeUTC)
+    public string? DeleteReason { get; set; }             // Lý do xóa (port từ Invoice_Invoice.DeleteReason)
+    public string? AttachedDelFilePath { get; set; }      // File đính kèm khi xóa (port từ Invoice_Invoice.AttachedDelFilePath)
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
