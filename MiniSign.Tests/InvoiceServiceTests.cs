@@ -412,4 +412,53 @@ public class InvoiceServiceTests
             Assert.False(r.ok);
         }
     }
+
+    // ===== Đánh dấu thay thế hóa đơn (port từ InBrand Invoice_Invoice_ChangeX) =====
+
+    private static async Task<Invoice> SeedIssued(IInvoiceService inv)
+    {
+        var c = await inv.CreateAsync("HD-001", "0101234567", "Cty ABC", "Nội dung", 1000m);
+        await inv.ApproveAsync(c.invoice!.Id, "00000001", "u1");
+        await inv.IssueAsync(c.invoice.Id, "u1");
+        return c.invoice;
+    }
+
+    [Fact]
+    public async Task Change_Issued_BecomesInactive()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);
+            var r = await inv.ChangeAsync(issued.Id, "điều chỉnh sai sót", "ketoan01");
+            Assert.True(r.ok);
+            Assert.False(r.invoice!.FlagChange);
+            Assert.Equal("ketoan01", r.invoice.ChangeBy);
+            Assert.Equal("điều chỉnh sai sót", r.invoice.ChangeReason);
+            Assert.NotNull(r.invoice.ChangeDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task Change_Pending_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.ChangeAsync(c.invoice!.Id, "lý do", "u1");
+            Assert.False(r.ok);   // chưa phát hành → không thay thế được
+            Assert.True(r.invoice!.FlagChange);
+        }
+    }
+
+    [Fact]
+    public async Task Change_AlreadyChanged_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);
+            await inv.ChangeAsync(issued.Id, "lần 1", "u1");
+            var r = await inv.ChangeAsync(issued.Id, "lần 2", "u1");
+            Assert.False(r.ok);   // đã thay thế → FlagChange không còn Active
+        }
+    }
 }

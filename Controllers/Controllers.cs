@@ -174,6 +174,15 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
         TempData[r.ok ? "Success" : "Error"] = r.msg;
         return RedirectToAction(nameof(Index));
     }
+
+    // Đánh dấu hóa đơn đã bị thay thế/điều chỉnh (port từ InBrand Invoice_Invoice_ChangeX). Chỉ khi ISSUED.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Change(int id, string? reason, string? changeBy)
+    {
+        var r = await invoices.ChangeAsync(id, reason ?? "", changeBy ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
 }
 
 public class OrgController(AppDbContext db) : Controller

@@ -32,6 +32,7 @@ public interface IInvoiceService
     Task<InvoiceResult> IssueAsync(int id, string issuedBy);
     Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy);
     Task<InvoiceResult> DeleteAsync(int id, string reason, string deleteBy, string? attachedDelFilePath);
+    Task<InvoiceResult> ChangeAsync(int id, string reason, string changeBy);
     Task<InvoiceDash> DashboardAsync();
     Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
 }
@@ -277,6 +278,29 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return new(true, "Đã xóa hóa đơn.", inv);
+    }
+
+    // Đánh dấu hóa đơn đã bị THAY THẾ/ĐIỀU CHỈNH (port từ InBrand Invoice_Invoice_ChangeX).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái ISSUED (Invoice_Invoice_CheckDB với InvoiceStatus.Issued).
+    //  - FlagChange phải đang Active (chưa bị thay thế) — lỗi Invoice_Invoice_Change_InvalidFlagChange.
+    //  - Khi thay thế ghi FlagChange = Inactive + người thay thế (ChangeBy) + thời gian (ChangeDTimeUTC) + lý do (Remark).
+    public async Task<InvoiceResult> ChangeAsync(int id, string reason, string changeBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Issued)
+            return new(false, "Chỉ được đánh dấu thay thế hóa đơn ở trạng thái ISSUED (đã phát hành).", inv);
+        if (!inv.FlagChange)
+            return new(false, "Hóa đơn đã bị thay thế trước đó (FlagChange không còn Active).", inv);
+
+        inv.FlagChange = false;
+        inv.ChangeReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        inv.ChangeBy = string.IsNullOrWhiteSpace(changeBy) ? "system" : changeBy.Trim();
+        inv.ChangeDTimeUTC = DateTime.UtcNow;
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, "Đã đánh dấu hóa đơn bị thay thế.", inv);
     }
 
     public async Task<InvoiceLifecycleDash> LifecycleDashboardAsync() => new(

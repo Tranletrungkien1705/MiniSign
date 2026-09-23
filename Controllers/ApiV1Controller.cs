@@ -184,6 +184,15 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
     }
 
+    // Đánh dấu hóa đơn đã bị thay thế/điều chỉnh (port từ InBrand Invoice_Invoice_ChangeX).
+    // Chỉ khi ISSUED + FlagChange đang Active; ghi FlagChange=Inactive + người/thời gian/lý do.
+    [HttpPost("invoices/{id:int}/change")]
+    public async Task<IActionResult> ChangeInvoice(int id, [FromBody] InvoiceChangeReq r)
+    {
+        var res = await invoices.ChangeAsync(id, r.Reason ?? "", r.ChangeBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
     // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
     [HttpGet("invoices/lifecycle")]
     public async Task<IActionResult> InvoiceLifecycle()
@@ -201,7 +210,8 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         i.InvoiceNo, i.TInvoiceCode, i.InvoiceDateUTC, i.InvoiceNoBy, i.InvoiceNoDTimeUTC,
         i.ApprBy, i.ApprDTimeUTC, i.IssuedBy, i.IssuedDTimeUTC,
         i.CancelBy, i.CancelDTimeUTC, i.CancelReason,
-        i.DeleteBy, i.DeleteDTimeUTC, i.DeleteReason, i.AttachedDelFilePath, i.CreatedAt, i.UpdatedAt
+        i.DeleteBy, i.DeleteDTimeUTC, i.DeleteReason, i.AttachedDelFilePath,
+        i.FlagChange, i.ChangeBy, i.ChangeDTimeUTC, i.ChangeReason, i.CreatedAt, i.UpdatedAt
     };
 }
 
@@ -216,6 +226,7 @@ public class InvoiceSignReq { public int CertId { get; set; } public string? Sig
 public class InvoiceStatusReq { public int Status { get; set; } public string? Error { get; set; } }
 public class InvoiceCancelReq { public string? Reason { get; set; } public string? CancelBy { get; set; } }
 public class InvoiceDeleteReq { public string? Reason { get; set; } public string? DeleteBy { get; set; } public string? AttachedDelFilePath { get; set; } }
+public class InvoiceChangeReq { public string? Reason { get; set; } public string? ChangeBy { get; set; } }
 public class InvoiceApproveReq { public string? InvoiceNo { get; set; } public string? ApprBy { get; set; } }
 public class InvoiceAllocateReq { public string? TInvoiceCode { get; set; } public DateTime? InvoiceDateUTC { get; set; } public string? AllocateBy { get; set; } }
 public class InvoiceIssueReq { public string? IssuedBy { get; set; } }

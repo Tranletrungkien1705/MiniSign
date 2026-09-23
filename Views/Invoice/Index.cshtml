@@ -81,6 +81,7 @@
                     <td><span class="badge bg-@LifeBadge(i.Status)">@LifeLabel(i.Status)</span>
                         @if (i.Status == InvoiceStatus.Canceled && !string.IsNullOrEmpty(i.CancelReason)) { <div class="text-danger" style="font-size:11px">@i.CancelReason</div> }
                         @if (i.Status == InvoiceStatus.Deleted && !string.IsNullOrEmpty(i.DeleteReason)) { <div class="text-muted" style="font-size:11px">@i.DeleteReason</div> }
+                        @if (!i.FlagChange) { <div class="text-warning" style="font-size:11px"><i class="bi bi-arrow-repeat"></i> Đã thay thế@(string.IsNullOrEmpty(i.ChangeReason) ? "" : ": " + i.ChangeReason)</div> }
                     </td>
                     <td><span class="badge bg-@Badge(i.SignStatus)">@Label(i.SignStatus)</span>
                         @if (i.SignStatus == SignStatus.Failed && !string.IsNullOrEmpty(i.SignError)) { <div class="text-danger" style="font-size:11px">@i.SignError</div> }
@@ -184,6 +185,22 @@
                                     <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-dark btn-sm">Xác nhận xóa</button></div>
                                 </form>
                             </div></div></div>
+                            @if (i.FlagChange)
+                            {
+                                <button class="btn btn-sm btn-outline-warning ms-1" data-bs-toggle="modal" data-bs-target="#change-@i.Id"><i class="bi bi-arrow-repeat"></i> Thay thế</button>
+                                <div class="modal fade" id="change-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                    <form asp-action="Change" method="post">@Html.AntiForgeryToken()
+                                        <input type="hidden" name="id" value="@i.Id" />
+                                        <div class="modal-header"><h6 class="modal-title">Đánh dấu thay thế hóa đơn @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                        <div class="modal-body text-start">
+                                            <div class="mb-2"><label class="form-label small text-muted">Lý do thay thế</label><input name="reason" class="form-control" placeholder="VD: điều chỉnh sai sót, thay thế bằng HĐ mới" /></div>
+                                            <div class="mb-2"><label class="form-label small text-muted">Người thay thế</label><input name="changeBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                            <div class="small text-muted">Chỉ đánh dấu được khi hóa đơn ở trạng thái ISSUED và chưa bị thay thế (FlagChange Active); sau đó FlagChange = Inactive (port từ InBrand <span class="mono">Invoice_Invoice_ChangeX</span>).</div>
+                                        </div>
+                                        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-warning btn-sm">Xác nhận thay thế</button></div>
+                                    </form>
+                                </div></div></div>
+                            }
                         }
                     </td>
                 </tr>

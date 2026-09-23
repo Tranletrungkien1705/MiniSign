@@ -106,6 +106,14 @@ public class Invoice : IOrgOwned
     public string? DeleteReason { get; set; }             // Lý do xóa (port từ Invoice_Invoice.DeleteReason)
     public string? AttachedDelFilePath { get; set; }      // File đính kèm khi xóa (port từ Invoice_Invoice.AttachedDelFilePath)
 
+    // Đánh dấu hóa đơn đã bị THAY THẾ/ĐIỀU CHỈNH (port từ InBrand Invoice_Invoice_ChangeX).
+    // FlagChange: true = còn hiệu lực (Active "1"), false = đã bị thay thế (Inactive "0").
+    // Quy tắc: chỉ đánh dấu được khi hóa đơn ở trạng thái ISSUED và FlagChange đang Active.
+    public bool FlagChange { get; set; } = true;          // Còn hiệu lực (port từ Invoice_Invoice.FlagChange)
+    public string? ChangeBy { get; set; }                 // Người thay thế (port từ Invoice_Invoice.ChangeBy)
+    public DateTime? ChangeDTimeUTC { get; set; }         // Thời gian thay thế (port từ Invoice_Invoice.ChangeDTimeUTC)
+    public string? ChangeReason { get; set; }             // Lý do thay thế (port từ Invoice_Invoice.Remark)
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
