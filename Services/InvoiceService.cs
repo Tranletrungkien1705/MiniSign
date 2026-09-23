@@ -33,6 +33,7 @@ public interface IInvoiceService
     Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy);
     Task<InvoiceResult> DeleteAsync(int id, string reason, string deleteBy, string? attachedDelFilePath);
     Task<InvoiceResult> ChangeAsync(int id, string reason, string changeBy);
+    Task<InvoiceResult> AdjustAsync(int id, string refNo, SourceInvoiceCode source, InvoiceAdjType adjType, string reason, string adjustBy);
     Task<InvoiceDash> DashboardAsync();
     Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
 }
@@ -301,6 +302,55 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return new(true, "Đã đánh dấu hóa đơn bị thay thế.", inv);
+    }
+
+    // Đánh dấu hóa đơn là ĐIỀU CHỈNH / THAY THẾ một hóa đơn khác (port từ InBrand
+    // Invoice_Invoice_Save_Adj / Invoice_Invoice_Save_Replace → Invoice_Invoice_SaveX).
+    // Quy tắc InBrand:
+    //  - InvoiceAdjType = AdjIncrease/AdjDecrease → bắt buộc có RefNo (Invoice_Invoice_SaveX_InvoiceAdjTypeIsNotNull).
+    //  - SourceInvoiceCode = Adj → hóa đơn RefNo phải tồn tại và ở trạng thái ISSUED.
+    //  - SourceInvoiceCode = Replace → hóa đơn RefNo phải tồn tại và ở trạng thái DELETED.
+    //  - Một hóa đơn chỉ được điều chỉnh/thay thế MỘT lần (myCheck_Invoice_Invoice_RefNo:
+    //    "1 hóa đơn đã điều chỉnh không được phép điều chỉnh tiếp").
+    public async Task<InvoiceResult> AdjustAsync(int id, string refNo, SourceInvoiceCode source, InvoiceAdjType adjType, string reason, string adjustBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+
+        var refCode = (refNo ?? "").Trim();
+
+        // Loại điều chỉnh Tăng/Giảm bắt buộc phải có hóa đơn gốc (RefNo).
+        if ((adjType == InvoiceAdjType.AdjIncrease || adjType == InvoiceAdjType.AdjDecrease) && refCode.Length == 0)
+            return new(false, "Điều chỉnh Tăng/Giảm bắt buộc phải có số tra cứu hóa đơn gốc (RefNo).", inv);
+
+        if (refCode.Length > 0)
+        {
+            var refInv = await db.Invoices.FirstOrDefaultAsync(i => i.InvoiceCode == refCode);
+            if (refInv == null) return new(false, $"Không tìm thấy hóa đơn gốc {refCode}.", inv);
+
+            // Hóa đơn điều chỉnh: hóa đơn gốc phải đã PHÁT HÀNH (ISSUED).
+            if (source == SourceInvoiceCode.Adj && refInv.Status != InvoiceStatus.Issued)
+                return new(false, "Hóa đơn điều chỉnh chỉ áp dụng cho hóa đơn gốc đã phát hành (ISSUED).", inv);
+
+            // Hóa đơn thay thế: hóa đơn gốc phải đã bị XÓA (DELETED).
+            if (source == SourceInvoiceCode.Replace && refInv.Status != InvoiceStatus.Deleted)
+                return new(false, "Hóa đơn thay thế chỉ áp dụng cho hóa đơn gốc đã bị xóa (DELETED).", inv);
+
+            // Một hóa đơn gốc chỉ được điều chỉnh/thay thế một lần (trừ hóa đơn điều chỉnh).
+            var already = await db.Invoices.AnyAsync(i => i.RefNo == refCode && i.SourceInvoiceCode != SourceInvoiceCode.Adj);
+            if (already)
+                return new(false, $"Hóa đơn gốc {refCode} đã được điều chỉnh/thay thế trước đó.", inv);
+        }
+
+        inv.RefNo = refCode.Length == 0 ? null : refCode;
+        inv.SourceInvoiceCode = source;
+        inv.InvoiceAdjType = adjType;
+        inv.ChangeReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        inv.ChangeBy = string.IsNullOrWhiteSpace(adjustBy) ? "system" : adjustBy.Trim();
+        inv.ChangeDTimeUTC = DateTime.UtcNow;
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, "Đã đánh dấu hóa đơn điều chỉnh/thay thế.", inv);
     }
 
     public async Task<InvoiceLifecycleDash> LifecycleDashboardAsync() => new(

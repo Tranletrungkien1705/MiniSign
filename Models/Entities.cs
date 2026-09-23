@@ -18,6 +18,18 @@ public enum SignStatus { Pending = 0, Processing = 1, Signed = 2, Failed = 3 }
 // Quy tắc nghiệp vụ (Invoice_Invoice_DeletedX): chỉ được XÓA khi hóa đơn đang ở ISSUED.
 public enum InvoiceStatus { Pending = 0, Approved = 1, Issued = 2, Canceled = 3, Deleted = 4 }
 
+// Nguồn gốc hóa đơn (port từ InBrand TConst.SourceInvoiceCode).
+//  - Root: hóa đơn gốc (INVOICEROOT).
+//  - Replace: hóa đơn thay thế (INVOICEREPLACE) — thay cho một hóa đơn đã bị XÓA (DELETED).
+//  - Adj: hóa đơn điều chỉnh (INVOICEADJ) — điều chỉnh một hóa đơn đã PHÁT HÀNH (ISSUED).
+public enum SourceInvoiceCode { Root = 0, Replace = 1, Adj = 2 }
+
+// Loại điều chỉnh (port từ InBrand TConst.InvoiceAdjType).
+//  - Normal: bình thường (không điều chỉnh).
+//  - AdjIncrease: điều chỉnh TĂNG (ADJINCREASE) — bắt buộc có RefNo.
+//  - AdjDecrease: điều chỉnh GIẢM (ADJDESCREASE) — bắt buộc có RefNo.
+public enum InvoiceAdjType { Normal = 0, AdjIncrease = 1, AdjDecrease = 2 }
+
 public class Org
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -113,6 +125,16 @@ public class Invoice : IOrgOwned
     public string? ChangeBy { get; set; }                 // Người thay thế (port từ Invoice_Invoice.ChangeBy)
     public DateTime? ChangeDTimeUTC { get; set; }         // Thời gian thay thế (port từ Invoice_Invoice.ChangeDTimeUTC)
     public string? ChangeReason { get; set; }             // Lý do thay thế (port từ Invoice_Invoice.Remark)
+
+    // Nguồn gốc + loại điều chỉnh (port từ InBrand Invoice_Invoice.SourceInvoiceCode / InvoiceAdjType).
+    // Quy tắc (Invoice_Invoice_SaveX):
+    //  - SourceInvoiceCode = Adj → hóa đơn được tham chiếu (RefNo) phải tồn tại và ở trạng thái ISSUED.
+    //  - SourceInvoiceCode = Replace → hóa đơn được tham chiếu (RefNo) phải tồn tại và ở trạng thái DELETED.
+    //  - InvoiceAdjType = AdjIncrease/AdjDecrease → bắt buộc có RefNo (Invoice_Invoice_SaveX_InvoiceAdjTypeIsNotNull).
+    //  - Một hóa đơn chỉ được điều chỉnh/thay thế MỘT lần (myCheck_Invoice_Invoice_RefNo).
+    public SourceInvoiceCode SourceInvoiceCode { get; set; } = SourceInvoiceCode.Root;  // Nguồn gốc HĐ
+    public InvoiceAdjType InvoiceAdjType { get; set; } = InvoiceAdjType.Normal;         // Loại điều chỉnh
+    public string? RefNo { get; set; }                    // Số tra cứu HĐ gốc bị điều chỉnh/thay thế (port từ Invoice_Invoice.RefNo)
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

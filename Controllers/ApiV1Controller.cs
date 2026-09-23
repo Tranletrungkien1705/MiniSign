@@ -193,6 +193,17 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
     }
 
+    // Đánh dấu hóa đơn là ĐIỀU CHỈNH/THAY THẾ một hóa đơn khác (port từ InBrand
+    // Invoice_Invoice_Save_Adj / Invoice_Invoice_Save_Replace → Invoice_Invoice_SaveX).
+    // Quy tắc: AdjIncrease/AdjDecrease bắt buộc có RefNo; Adj → RefNo phải ISSUED;
+    // Replace → RefNo phải DELETED; một hóa đơn gốc chỉ được điều chỉnh/thay thế một lần.
+    [HttpPost("invoices/{id:int}/adjust")]
+    public async Task<IActionResult> AdjustInvoice(int id, [FromBody] InvoiceAdjustReq r)
+    {
+        var res = await invoices.AdjustAsync(id, r.RefNo ?? "", (SourceInvoiceCode)r.SourceInvoiceCode, (InvoiceAdjType)r.InvoiceAdjType, r.Reason ?? "", r.AdjustBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
     // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
     [HttpGet("invoices/lifecycle")]
     public async Task<IActionResult> InvoiceLifecycle()
@@ -211,7 +222,9 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         i.ApprBy, i.ApprDTimeUTC, i.IssuedBy, i.IssuedDTimeUTC,
         i.CancelBy, i.CancelDTimeUTC, i.CancelReason,
         i.DeleteBy, i.DeleteDTimeUTC, i.DeleteReason, i.AttachedDelFilePath,
-        i.FlagChange, i.ChangeBy, i.ChangeDTimeUTC, i.ChangeReason, i.CreatedAt, i.UpdatedAt
+        i.FlagChange, i.ChangeBy, i.ChangeDTimeUTC, i.ChangeReason, i.CreatedAt, i.UpdatedAt,
+        sourceInvoiceCode = (int)i.SourceInvoiceCode, sourceInvoiceCodeText = i.SourceInvoiceCode.ToString(),
+        invoiceAdjType = (int)i.InvoiceAdjType, invoiceAdjTypeText = i.InvoiceAdjType.ToString(), i.RefNo
     };
 }
 
@@ -227,6 +240,7 @@ public class InvoiceStatusReq { public int Status { get; set; } public string? E
 public class InvoiceCancelReq { public string? Reason { get; set; } public string? CancelBy { get; set; } }
 public class InvoiceDeleteReq { public string? Reason { get; set; } public string? DeleteBy { get; set; } public string? AttachedDelFilePath { get; set; } }
 public class InvoiceChangeReq { public string? Reason { get; set; } public string? ChangeBy { get; set; } }
+public class InvoiceAdjustReq { public string? RefNo { get; set; } public int SourceInvoiceCode { get; set; } public int InvoiceAdjType { get; set; } public string? Reason { get; set; } public string? AdjustBy { get; set; } }
 public class InvoiceApproveReq { public string? InvoiceNo { get; set; } public string? ApprBy { get; set; } }
 public class InvoiceAllocateReq { public string? TInvoiceCode { get; set; } public DateTime? InvoiceDateUTC { get; set; } public string? AllocateBy { get; set; } }
 public class InvoiceIssueReq { public string? IssuedBy { get; set; } }

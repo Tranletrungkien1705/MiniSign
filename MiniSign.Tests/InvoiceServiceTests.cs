@@ -461,4 +461,100 @@ public class InvoiceServiceTests
             Assert.False(r.ok);   // đã thay thế → FlagChange không còn Active
         }
     }
+
+    // ===== Đánh dấu hóa đơn ĐIỀU CHỈNH/THAY THẾ (port từ InBrand Invoice_Invoice_Save_Adj/Save_Replace → Invoice_Invoice_SaveX) =====
+
+    [Fact]
+    public async Task Adjust_AdjIncrease_RequiresRefNo()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-002", "", "", "Nội dung", 0m);
+            var r = await inv.AdjustAsync(c.invoice!.Id, "", SourceInvoiceCode.Adj, InvoiceAdjType.AdjIncrease, "tăng", "u1");
+            Assert.False(r.ok);   // điều chỉnh Tăng bắt buộc có RefNo
+        }
+    }
+
+    [Fact]
+    public async Task Adjust_Adj_RefNoMustBeIssued()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            // Hóa đơn gốc mới ở PENDING → chưa phát hành.
+            await inv.CreateAsync("HD-001", "", "", "gốc", 0m);
+            var c = await inv.CreateAsync("HD-002", "", "", "điều chỉnh", 0m);
+            var r = await inv.AdjustAsync(c.invoice!.Id, "HD-001", SourceInvoiceCode.Adj, InvoiceAdjType.AdjIncrease, "tăng", "u1");
+            Assert.False(r.ok);   // gốc chưa ISSUED → không điều chỉnh được
+        }
+    }
+
+    [Fact]
+    public async Task Adjust_Adj_IssuedRefNo_Succeeds()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);   // HD-001 đã ISSUED
+            var c = await inv.CreateAsync("HD-002", "", "", "điều chỉnh", 0m);
+            var r = await inv.AdjustAsync(c.invoice!.Id, "HD-001", SourceInvoiceCode.Adj, InvoiceAdjType.AdjIncrease, "tăng giá", "ketoan01");
+            Assert.True(r.ok);
+            Assert.Equal(SourceInvoiceCode.Adj, r.invoice!.SourceInvoiceCode);
+            Assert.Equal(InvoiceAdjType.AdjIncrease, r.invoice.InvoiceAdjType);
+            Assert.Equal("HD-001", r.invoice.RefNo);
+            Assert.Equal("ketoan01", r.invoice.ChangeBy);
+            Assert.NotNull(r.invoice.ChangeDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task Adjust_Replace_RefNoMustBeDeleted()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);   // HD-001 đang ISSUED (chưa xóa)
+            var c = await inv.CreateAsync("HD-002", "", "", "thay thế", 0m);
+            var r = await inv.AdjustAsync(c.invoice!.Id, "HD-001", SourceInvoiceCode.Replace, InvoiceAdjType.Normal, "thay thế", "u1");
+            Assert.False(r.ok);   // gốc chưa DELETED → không thay thế được
+        }
+    }
+
+    [Fact]
+    public async Task Adjust_Replace_DeletedRefNo_Succeeds()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);
+            await inv.DeleteAsync(issued.Id, "sai", "u1", null);   // HD-001 → DELETED
+            var c = await inv.CreateAsync("HD-002", "", "", "thay thế", 0m);
+            var r = await inv.AdjustAsync(c.invoice!.Id, "HD-001", SourceInvoiceCode.Replace, InvoiceAdjType.Normal, "thay thế", "ketoan01");
+            Assert.True(r.ok);
+            Assert.Equal(SourceInvoiceCode.Replace, r.invoice!.SourceInvoiceCode);
+            Assert.Equal("HD-001", r.invoice.RefNo);
+        }
+    }
+
+    [Fact]
+    public async Task Adjust_RefNoAlreadyAdjusted_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);
+            await inv.DeleteAsync(issued.Id, "sai", "u1", null);   // HD-001 → DELETED
+            var a = await inv.CreateAsync("HD-002", "", "", "thay thế 1", 0m);
+            await inv.AdjustAsync(a.invoice!.Id, "HD-001", SourceInvoiceCode.Replace, InvoiceAdjType.Normal, "lần 1", "u1");
+            var b = await inv.CreateAsync("HD-003", "", "", "thay thế 2", 0m);
+            var r = await inv.AdjustAsync(b.invoice!.Id, "HD-001", SourceInvoiceCode.Replace, InvoiceAdjType.Normal, "lần 2", "u1");
+            Assert.False(r.ok);   // gốc đã được thay thế một lần → không thay thế tiếp
+        }
+    }
+
+    [Fact]
+    public async Task Adjust_UnknownRefNo_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-002", "", "", "điều chỉnh", 0m);
+            var r = await inv.AdjustAsync(c.invoice!.Id, "KHONG-CO", SourceInvoiceCode.Adj, InvoiceAdjType.AdjIncrease, "tăng", "u1");
+            Assert.False(r.ok);   // không tìm thấy hóa đơn gốc
+        }
+    }
 }

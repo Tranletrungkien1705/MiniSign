@@ -82,6 +82,7 @@
                         @if (i.Status == InvoiceStatus.Canceled && !string.IsNullOrEmpty(i.CancelReason)) { <div class="text-danger" style="font-size:11px">@i.CancelReason</div> }
                         @if (i.Status == InvoiceStatus.Deleted && !string.IsNullOrEmpty(i.DeleteReason)) { <div class="text-muted" style="font-size:11px">@i.DeleteReason</div> }
                         @if (!i.FlagChange) { <div class="text-warning" style="font-size:11px"><i class="bi bi-arrow-repeat"></i> Đã thay thế@(string.IsNullOrEmpty(i.ChangeReason) ? "" : ": " + i.ChangeReason)</div> }
+                        @if (i.SourceInvoiceCode != SourceInvoiceCode.Root) { <div class="text-info" style="font-size:11px"><i class="bi bi-pencil-square"></i> @(i.SourceInvoiceCode == SourceInvoiceCode.Adj ? "HĐ điều chỉnh" : "HĐ thay thế")@(i.InvoiceAdjType == InvoiceAdjType.AdjIncrease ? " (Tăng)" : i.InvoiceAdjType == InvoiceAdjType.AdjDecrease ? " (Giảm)" : "")@(string.IsNullOrEmpty(i.RefNo) ? "" : " — gốc: " + i.RefNo)</div> }
                     </td>
                     <td><span class="badge bg-@Badge(i.SignStatus)">@Label(i.SignStatus)</span>
                         @if (i.SignStatus == SignStatus.Failed && !string.IsNullOrEmpty(i.SignError)) { <div class="text-danger" style="font-size:11px">@i.SignError</div> }
@@ -201,6 +202,31 @@
                                     </form>
                                 </div></div></div>
                             }
+                            <button class="btn btn-sm btn-outline-info ms-1" data-bs-toggle="modal" data-bs-target="#adjust-@i.Id"><i class="bi bi-pencil-square"></i> Điều chỉnh</button>
+                            <div class="modal fade" id="adjust-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                <form asp-action="Adjust" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Đánh dấu điều chỉnh/thay thế hóa đơn @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="mb-2"><label class="form-label small text-muted">Nguồn gốc hóa đơn</label>
+                                            <select name="sourceInvoiceCode" class="form-select">
+                                                <option value="2">Hóa đơn điều chỉnh (INVOICEADJ — gốc phải ISSUED)</option>
+                                                <option value="1">Hóa đơn thay thế (INVOICEREPLACE — gốc phải DELETED)</option>
+                                            </select></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Loại điều chỉnh</label>
+                                            <select name="invoiceAdjType" class="form-select">
+                                                <option value="0">Bình thường (NORMAL)</option>
+                                                <option value="1">Điều chỉnh Tăng (ADJINCREASE)</option>
+                                                <option value="2">Điều chỉnh Giảm (ADJDESCREASE)</option>
+                                            </select></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Số tra cứu hóa đơn gốc (RefNo)</label><input name="refNo" class="form-control mono" placeholder="VD: 1C26TAA-00000001" /></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Lý do</label><input name="reason" class="form-control" placeholder="VD: điều chỉnh sai sót" /></div>
+                                        <div class="mb-2"><label class="form-label small text-muted">Người điều chỉnh</label><input name="adjustBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                        <div class="small text-muted">Điều chỉnh Tăng/Giảm bắt buộc có RefNo; hóa đơn gốc chỉ được điều chỉnh/thay thế một lần (port từ InBrand <span class="mono">Invoice_Invoice_SaveX</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-info btn-sm">Xác nhận</button></div>
+                                </form>
+                            </div></div></div>
                         }
                     </td>
                 </tr>
