@@ -1,0 +1,54 @@
+@{
+    ViewData["Title"] = "Tra cứu chứng thư";
+    var r = ViewBag.Result as CertValidation;
+}
+<div class="row g-3">
+    <div class="col-lg-7"><div class="card"><div class="card-body">
+        <h6 class="fw-bold mb-3">Tra cứu &amp; xác thực chứng thư theo Serial + MST</h6>
+        <form asp-action="Do" method="post">@Html.AntiForgeryToken()
+            <div class="mb-2"><label class="form-label small text-muted">Serial chứng thư *</label><input name="serial" value="@ViewBag.Serial" class="form-control mono" placeholder="VD 54c0ffee1234abcd5678" required /></div>
+            <div class="mb-3"><label class="form-label small text-muted">Mã số thuế (MST) đơn vị *</label><input name="taxCode" value="@ViewBag.TaxCode" class="form-control mono" placeholder="VD 0101234567" required /></div>
+            <button class="btn btn-primary"><i class="bi bi-search me-1"></i>Tra cứu</button>
+        </form>
+        <div class="small text-muted mt-3">Kiểm tra chứng thư có trong hệ thống, MST khớp với đăng ký và chứng thư còn hiệu lực (port từ InBrand <span class="mono">CertificateInfo</span>).</div>
+    </div></div></div>
+    <div class="col-lg-5">
+        @if (r != null)
+        {
+            <div class="card"><div class="card-body text-center">
+                @if (r.valid)
+                {
+                    <i class="bi bi-patch-check-fill" style="font-size:48px;color:#16a34a"></i>
+                    <h5 class="fw-bold text-success mt-2">CHỨNG THƯ HỢP LỆ</h5>
+                }
+                else
+                {
+                    <i class="bi bi-patch-exclamation-fill" style="font-size:48px;color:#dc2626"></i>
+                    <h5 class="fw-bold text-danger mt-2">KHÔNG HỢP LỆ</h5>
+                }
+                <p class="small text-muted">@r.message</p>
+                @if (r.found)
+                {
+                    <hr /><div class="text-start small">
+                        <div>Chủ thể: <b>@r.subject</b></div>
+                        <div>Serial: <span class="mono">@r.serial</span></div>
+                        <div>MST đăng ký: <span class="mono">@(string.IsNullOrEmpty(r.taxCode) ? "—" : r.taxCode)</span> @(r.taxCodeMatch ? "✓" : "✗")</div>
+                        <div>Thuật toán: <span class="mono">@r.algorithm</span></div>
+                        <div>Trạng thái: <b>@r.status</b></div>
+                        @if (r.notBefore != null && r.notAfter != null)
+                        {
+                            <div>Hiệu lực: @r.notBefore.Value.ToString("dd/MM/yyyy") – @r.notAfter.Value.ToString("dd/MM/yyyy")</div>
+                        }
+                    </div>
+                }
+            </div></div>
+        }
+        else
+        {
+            <div class="card"><div class="card-body">
+                <h6 class="fw-bold mb-2">Xác thực chứng thư</h6>
+                <p class="small text-muted mb-0">Nhập serial + MST. Hệ thống đối chiếu chứng thư đã đăng ký: có tồn tại, MST có khớp và chứng thư còn hiệu lực hay không.</p>
+            </div></div>
+        }
+    </div>
+</div>

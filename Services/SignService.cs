@@ -19,12 +19,14 @@ public interface ISignService
     Task<Certificate?> GetCertAsync(int id);
     Task<Certificate?> GetBySerialAsync(string serial);
     Task<(bool ok, string msg, int id)> CreateCertAsync(string subject, int years);
+    Task<(bool ok, string msg, int id)> CreateCertAsync(string subject, int years, string taxCode);
     Task<(bool ok, string msg)> RevokeAsync(int id);
     Task<SignResult> SignAsync(int certId, string docName, string content);
     Task<SignResult> SignAsync(int certId, string docName, string content, SignAlgorithm algorithm);
     Task<VerifyResult> VerifyAsync(string serial, string content, string signatureB64);
     Task<VerifyResult> VerifyAsync(string serial, string content, string signatureB64, SignAlgorithm algorithm);
     Task<CertInfo?> CertInfoAsync(string serial);
+    Task<CertValidation> ValidateAsync(string serial, string taxCode);
     Task<List<SignLog>> SignLogsAsync(int? certId);
     Task<SignDash> DashboardAsync();
 
@@ -39,12 +41,16 @@ public class SignService(AppDbContext db) : ISignService
         db.Certificates.IgnoreQueryFilters().FirstOrDefaultAsync(c => c.Serial == serial);
 
     public async Task<(bool ok, string msg, int id)> CreateCertAsync(string subject, int years)
+        => await CreateCertAsync(subject, years, "");
+
+    public async Task<(bool ok, string msg, int id)> CreateCertAsync(string subject, int years, string taxCode)
     {
         if (string.IsNullOrWhiteSpace(subject)) return (false, "Cần tên chủ thể (CN).", 0);
         using var rsa = RSA.Create(2048);
         var cert = new Certificate
         {
             Subject = subject.Trim(),
+            TaxCode = (taxCode ?? "").Trim(),
             Serial = await GenSerialAsync(),
             PublicKeyPem = rsa.ExportSubjectPublicKeyInfoPem(),
             PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem(),
@@ -114,6 +120,31 @@ public class SignService(AppDbContext db) : ISignService
         var (text, _) = Ui.Cert(c);
         return new(c.Subject, c.Serial, c.Algorithm, c.NotBefore, c.NotAfter, text, c.IsUsable);
     }
+
+    // Tra cứu & xác thực chứng thư theo serial + MST (port từ InBrand CertificateInfo:
+    // "Check SerialNumber và MST có trong hệ thống"). MST so khớp không phân biệt hoa/thường,
+    // bỏ khoảng trắng và dấu gạch. Chứng thư hợp lệ khi còn Active và trong khoảng hiệu lực.
+    public async Task<CertValidation> ValidateAsync(string serial, string taxCode)
+    {
+        var s = (serial ?? "").Trim();
+        var mst = NormalizeTaxCode(taxCode);
+        var c = await GetBySerialAsync(s);
+        if (c == null)
+            return new(false, false, false, "Không tìm thấy",
+                "Không có chứng thư với serial này trong hệ thống.", null, null, s, null, null, null);
+
+        var (text, _) = Ui.Cert(c);
+        var match = mst.Length > 0 && NormalizeTaxCode(c.TaxCode) == mst;
+        var valid = c.IsUsable && match;
+        var msg = !match
+            ? "MST không khớp với chứng thư đã đăng ký."
+            : valid ? "Chứng thư hợp lệ — serial và MST khớp, còn hiệu lực."
+                    : $"Chứng thư không còn hiệu lực ({text}).";
+        return new(true, match, valid, text, msg, c.Subject, c.TaxCode, c.Serial, c.Algorithm, c.NotBefore, c.NotAfter);
+    }
+
+    private static string NormalizeTaxCode(string? s)
+        => (s ?? "").Trim().Replace(" ", "").Replace("-", "").Replace(".", "").ToUpperInvariant();
 
     public Task<List<SignLog>> SignLogsAsync(int? certId)
     {

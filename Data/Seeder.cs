@@ -19,6 +19,7 @@ public static class Seeder
             var cert = new Certificate
             {
                 Subject = "Công ty CP Ô tô Đông Đô",
+                TaxCode = "0101234567",
                 Serial = "54c0ffee1234abcd5678",
                 PublicKeyPem = rsa.ExportSubjectPublicKeyInfoPem(),
                 PrivateKeyPem = rsa.ExportPkcs8PrivateKeyPem(),
@@ -44,6 +45,7 @@ public static class Seeder
             "CREATE TABLE IF NOT EXISTS minisign.\"Orgs\" (\"Id\" uuid PRIMARY KEY, \"Name\" text NOT NULL DEFAULT '', \"ApiKey\" text NOT NULL DEFAULT '', \"CreatedAt\" timestamp NOT NULL DEFAULT now())",
             "CREATE UNIQUE INDEX IF NOT EXISTS \"IX_Orgs_ApiKey\" ON minisign.\"Orgs\" (\"ApiKey\")" };
         foreach (var t in tables) sql.Add($"ALTER TABLE minisign.\"{t}\" ADD COLUMN IF NOT EXISTS \"OrgId\" uuid NOT NULL DEFAULT '{def}'");
+        sql.Add("ALTER TABLE minisign.\"Certificates\" ADD COLUMN IF NOT EXISTS \"TaxCode\" text NOT NULL DEFAULT ''");
         foreach (var s in sql) try { await db.Database.ExecuteSqlRawAsync(s); } catch { }
     }
 }

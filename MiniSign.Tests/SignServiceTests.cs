@@ -136,4 +136,59 @@ public class SignServiceTests
             Assert.True(info.usable);
         }
     }
+
+    // Port từ InBrand CertificateInfo: "Check SerialNumber và MST có trong hệ thống".
+    [Fact]
+    public async Task Validate_SerialAndTaxCode_Match_Valid()
+    {
+        var (db, svc, conn) = NewSvc(); using (conn)
+        {
+            var (_, _, id) = await svc.CreateCertAsync("Cty ABC", 3, "0101234567");
+            var c = await svc.GetCertAsync(id);
+            var v = await svc.ValidateAsync(c!.Serial, "0101234567");
+            Assert.True(v.found);
+            Assert.True(v.taxCodeMatch);
+            Assert.True(v.valid);
+        }
+    }
+
+    [Fact]
+    public async Task Validate_WrongTaxCode_Invalid()
+    {
+        var (db, svc, conn) = NewSvc(); using (conn)
+        {
+            var (_, _, id) = await svc.CreateCertAsync("Cty ABC", 3, "0101234567");
+            var c = await svc.GetCertAsync(id);
+            var v = await svc.ValidateAsync(c!.Serial, "9999999999");
+            Assert.True(v.found);
+            Assert.False(v.taxCodeMatch);
+            Assert.False(v.valid);
+        }
+    }
+
+    [Fact]
+    public async Task Validate_UnknownSerial_NotFound()
+    {
+        var (db, svc, conn) = NewSvc(); using (conn)
+        {
+            var v = await svc.ValidateAsync("KHONGCO", "0101234567");
+            Assert.False(v.found);
+            Assert.False(v.valid);
+        }
+    }
+
+    [Fact]
+    public async Task Validate_RevokedCert_Invalid()
+    {
+        var (db, svc, conn) = NewSvc(); using (conn)
+        {
+            var (_, _, id) = await svc.CreateCertAsync("Cty ABC", 3, "0101234567");
+            var c = await svc.GetCertAsync(id);
+            await svc.RevokeAsync(id);
+            var v = await svc.ValidateAsync(c!.Serial, "0101234567");
+            Assert.True(v.found);
+            Assert.True(v.taxCodeMatch);
+            Assert.False(v.valid);   // đã thu hồi → không hợp lệ
+        }
+    }
 }

@@ -15,6 +15,7 @@ export const api = {
   revoke: (id) => req(`/certs/${id}/revoke`, { method: 'POST' }),
   sign: (b) => req('/sign', { method: 'POST', body: b }),
   verify: (b) => req('/verify', { method: 'POST', body: b }),
+  validateCert: (b) => req('/certs/validate', { method: 'POST', body: b }),
   signlogs: (certId) => req(`/signlogs${certId ? `?certId=${certId}` : ''}`)
 }
 export const fmtDate = (s) => s ? new Date(s).toLocaleDateString('vi-VN') : '—'

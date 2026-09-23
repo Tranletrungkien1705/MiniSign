@@ -11,7 +11,8 @@ function Layout() {
     <>
       <nav className="nav"><span className="brand">✍️ MiniSign</span>
         <NavLink to="/" end>Tổng quan</NavLink><NavLink to="/certs">Chứng thư số</NavLink>
-        <NavLink to="/sign">Ký tài liệu</NavLink><NavLink to="/verify">Xác thực</NavLink></nav>
+        <NavLink to="/sign">Ký tài liệu</NavLink><NavLink to="/verify">Xác thực</NavLink>
+        <NavLink to="/registry">Tra cứu CTS</NavLink></nav>
       <div className="wrap"><Outlet /></div>
     </>
   )
@@ -34,10 +35,10 @@ function Dashboard() {
 }
 
 function Certs() {
-  const [rows, setRows] = useState([]); const [subject, setSubject] = useState(''); const [years, setYears] = useState(3); const [msg, setMsg] = useState(null)
+  const [rows, setRows] = useState([]); const [subject, setSubject] = useState(''); const [taxCode, setTaxCode] = useState(''); const [years, setYears] = useState(3); const [msg, setMsg] = useState(null)
   const load = () => api.certs().then(r => setRows(r.data))
   useEffect(() => { load() }, [])
-  const create = async () => { try { if (!subject) return; await api.createCert({ subject, years: Number(years) }); setSubject(''); setMsg({ ok: true, text: 'Đã tạo chứng thư (RSA keypair).' }); load() } catch (e) { setMsg({ ok: false, text: e.message }) } }
+  const create = async () => { try { if (!subject) return; await api.createCert({ subject, years: Number(years), taxCode }); setSubject(''); setTaxCode(''); setMsg({ ok: true, text: 'Đã tạo chứng thư (RSA keypair).' }); load() } catch (e) { setMsg({ ok: false, text: e.message }) } }
   const revoke = async (id) => { try { const r = await api.revoke(id); setMsg({ ok: true, text: r.data.msg }); load() } catch (e) { setMsg({ ok: false, text: e.message }) } }
   return (
     <>
@@ -45,6 +46,7 @@ function Certs() {
       <Flash msg={msg} />
       <div className="card"><div className="row">
         <Field label="Chủ thể (CN) — VD: Công ty ABC"><input value={subject} onChange={e => setSubject(e.target.value)} /></Field>
+        <Field label="Mã số thuế (MST)"><input value={taxCode} onChange={e => setTaxCode(e.target.value)} /></Field>
         <Field label="Hiệu lực (năm)"><input type="number" value={years} onChange={e => setYears(e.target.value)} /></Field>
         <div style={{ flex: 'none', alignSelf: 'flex-end' }}><button className="btn" onClick={create}>+ Cấp chứng thư</button></div></div></div>
       <div className="card" style={{ padding: 0, overflow: 'auto' }}>
@@ -109,6 +111,33 @@ function Verify() {
   )
 }
 
+function Registry() {
+  const [f, setF] = useState({ serial: '', taxCode: '' }); const [res, setRes] = useState(null); const [err, setErr] = useState(null)
+  const doLookup = async () => { try { const r = await api.validateCert(f); setRes(r.data); setErr(null) } catch (e) { setErr(e.message); setRes(null) } }
+  return (
+    <>
+      <h1>Tra cứu chứng thư</h1>
+      <div className="card">
+        <Field label="Serial chứng thư"><input value={f.serial} onChange={e => setF({ ...f, serial: e.target.value })} /></Field>
+        <Field label="Mã số thuế (MST) đơn vị"><input value={f.taxCode} onChange={e => setF({ ...f, taxCode: e.target.value })} /></Field>
+        <div style={{ marginTop: 12 }}><button className="btn" onClick={doLookup}>Tra cứu</button></div>
+        <p className="muted">Đối chiếu chứng thư đã đăng ký: có tồn tại, MST có khớp và còn hiệu lực hay không.</p>
+      </div>
+      {err && <Flash msg={{ ok: false, text: err }} />}
+      {res && (
+        <div className="card" style={{ borderLeft: `5px solid ${res.valid ? 'var(--success)' : 'var(--danger)'}` }}>
+          <h2 style={{ color: res.valid ? 'var(--success)' : 'var(--danger)' }}>{res.valid ? '✅ Chứng thư HỢP LỆ' : '❌ Chứng thư KHÔNG hợp lệ'}</h2>
+          <p>{res.message}</p>
+          {res.found && <dl className="dl"><dt>Chủ thể</dt><dd>{res.subject}</dd><dt>Serial</dt><dd style={{ fontFamily: 'monospace' }}>{res.serial}</dd>
+            <dt>MST đăng ký</dt><dd style={{ fontFamily: 'monospace' }}>{res.taxCode || '—'} {res.taxCodeMatch ? '✓' : '✗'}</dd>
+            <dt>Thuật toán</dt><dd>{res.algorithm}</dd><dt>Trạng thái</dt><dd>{res.status}</dd>
+            {res.notBefore && res.notAfter && <><dt>Hiệu lực</dt><dd>{fmtDate(res.notBefore)}–{fmtDate(res.notAfter)}</dd></>}</dl>}
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function App() {
   return (
     <Routes>
@@ -117,6 +146,7 @@ export default function App() {
         <Route path="certs" element={<Certs />} />
         <Route path="sign" element={<Sign />} />
         <Route path="verify" element={<Verify />} />
+        <Route path="registry" element={<Registry />} />
       </Route>
     </Routes>
   )

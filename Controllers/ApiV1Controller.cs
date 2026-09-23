@@ -31,7 +31,7 @@ public class ApiV1Controller(ISignService svc, ICache cache, ITenantContext tena
     public async Task<IActionResult> Certs()
         => Ok((await svc.CertsAsync()).Select(c => new
         {
-            c.Id, c.Subject, c.Serial, c.Algorithm, c.NotBefore, c.NotAfter,
+            c.Id, c.Subject, c.TaxCode, c.Serial, c.Algorithm, c.NotBefore, c.NotAfter,
             status = (int)c.Status, statusText = Ui.Cert(c).text, statusCss = Ui.Cert(c).css, usable = c.IsUsable
         }));
 
@@ -39,7 +39,7 @@ public class ApiV1Controller(ISignService svc, ICache cache, ITenantContext tena
     public async Task<IActionResult> CreateCert([FromBody] CertReq r)
     {
         if (string.IsNullOrWhiteSpace(r.Subject)) return BadRequest(new { error = "Cần chủ thể (CN)." });
-        var (ok, msg, id) = await svc.CreateCertAsync(r.Subject.Trim(), r.Years <= 0 ? 3 : r.Years);
+        var (ok, msg, id) = await svc.CreateCertAsync(r.Subject.Trim(), r.Years <= 0 ? 3 : r.Years, r.TaxCode ?? "");
         return ok ? Ok(new { id }) : BadRequest(new { error = msg });
     }
 
@@ -88,6 +88,12 @@ public class ApiV1Controller(ISignService svc, ICache cache, ITenantContext tena
         return info == null ? NotFound(new { error = "Không tìm thấy chứng thư." }) : Ok(info);
     }
 
+    // Tra cứu & xác thực chứng thư theo serial + MST (port từ InBrand CertificateInfo:
+    // "Check SerialNumber và MST có trong hệ thống").
+    [HttpPost("certs/validate")]
+    public async Task<IActionResult> ValidateCert([FromBody] ValidateReq r)
+        => Ok(await svc.ValidateAsync(r.Serial ?? "", r.TaxCode ?? ""));
+
     [HttpGet("signlogs")]
     public async Task<IActionResult> SignLogs([FromQuery] int? certId)
         => Ok((await svc.SignLogsAsync(certId)).Select(l => new { l.Id, cert = l.Certificate?.Subject, serial = l.Certificate?.Serial, l.DocName, l.Hash, l.ContentLength, l.CreatedAt }));
@@ -95,6 +101,7 @@ public class ApiV1Controller(ISignService svc, ICache cache, ITenantContext tena
 
 public record DashDto(int Certs, int Active, int Signs);
 
-public class CertReq { public string Subject { get; set; } = ""; public int Years { get; set; } }
+public class CertReq { public string Subject { get; set; } = ""; public int Years { get; set; } public string? TaxCode { get; set; } }
 public class SignReq { public int CertId { get; set; } public string? DocName { get; set; } public string? Content { get; set; } }
 public class VerifyReq { public string? Serial { get; set; } public string? Content { get; set; } public string? Signature { get; set; } }
+public class ValidateReq { public string? Serial { get; set; } public string? TaxCode { get; set; } }

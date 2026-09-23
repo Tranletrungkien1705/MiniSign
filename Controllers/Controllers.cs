@@ -22,9 +22,9 @@ public class CertController(ISignService svc) : Controller
     public async Task<IActionResult> Index() => View(await svc.CertsAsync());
 
     [HttpPost, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(string subject, int years)
+    public async Task<IActionResult> Create(string subject, int years, string? taxCode)
     {
-        var (ok, msg, _) = await svc.CreateCertAsync(subject, years);
+        var (ok, msg, _) = await svc.CreateCertAsync(subject, years, taxCode ?? "");
         TempData[ok ? "Success" : "Error"] = msg; return RedirectToAction(nameof(Index));
     }
 
@@ -75,6 +75,20 @@ public class VerifyController(ISignService svc) : Controller
     {
         ViewBag.Result = await svc.VerifyAsync(serial ?? "", content ?? "", signature ?? "");
         ViewBag.Serial = serial; ViewBag.Content = content; ViewBag.Signature = signature;
+        return View("Index");
+    }
+}
+
+// Tra cứu & xác thực chứng thư theo serial + MST (port từ InBrand CertificateInfo).
+public class RegistryController(ISignService svc) : Controller
+{
+    public IActionResult Index() => View();
+
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> Do(string serial, string taxCode)
+    {
+        ViewBag.Result = await svc.ValidateAsync(serial ?? "", taxCode ?? "");
+        ViewBag.Serial = serial; ViewBag.TaxCode = taxCode;
         return View("Index");
     }
 }
