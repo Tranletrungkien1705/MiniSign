@@ -13,6 +13,30 @@ public record InvoiceDash(int Total, int Pending, int Processing, int Signed, in
 // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
 public record InvoiceLifecycleDash(int Total, int Pending, int Approved, int Issued, int Canceled, int Deleted);
 
+// Dữ liệu cập nhật hóa đơn SAU KHI CẤP SỐ (port từ InBrand Invoice_Invoice_UpdAfterAllocatedX).
+// Gồm phương thức thanh toán, thông tin khách hàng và bảng kê giá trị theo thuế suất.
+public record InvoiceUpdateReq(
+    string? PaymentMethodCode,
+    string? CustomerNNTCode,
+    string? CustomerNNTName,
+    string? CustomerNNTAddress,
+    string? CustomerNNTPhone,
+    string? CustomerNNTBankName,
+    string? CustomerNNTEmail,
+    string? CustomerNNTAccNo,
+    string? CustomerNNTBuyerName,
+    string? CustomerMST,
+    DateTime? InvoiceDateUTC,
+    decimal TotalValInvoice,
+    decimal TotalValVAT,
+    decimal TotalValPmt,
+    decimal ValGoodsNotTaxable,
+    decimal ValGoodsNotChargeTax,
+    decimal ValGoodsVAT5,
+    decimal ValVAT5,
+    decimal ValGoodsVAT10,
+    decimal ValVAT10);
+
 // Nghiệp vụ ký hóa đơn/tài liệu theo vòng đời trạng thái.
 // Port từ InBrand OS_Invoice_InvoiceTemp + OS_Invoice_InvoiceTemp_UpdMultiSignStatus:
 //  - Hóa đơn có SignStatus (PENDING/PROCESSING/SIGNED/FAILED).
@@ -34,6 +58,7 @@ public interface IInvoiceService
     Task<InvoiceResult> DeleteAsync(int id, string reason, string deleteBy, string? attachedDelFilePath);
     Task<InvoiceResult> ChangeAsync(int id, string reason, string changeBy);
     Task<InvoiceResult> AdjustAsync(int id, string refNo, SourceInvoiceCode source, InvoiceAdjType adjType, string reason, string adjustBy);
+    Task<InvoiceResult> UpdateAfterAllocatedAsync(int id, InvoiceUpdateReq req);
     Task<InvoiceDash> DashboardAsync();
     Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
 }
@@ -352,6 +377,80 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         await db.SaveChangesAsync();
         return new(true, "Đã đánh dấu hóa đơn điều chỉnh/thay thế.", inv);
     }
+
+    // Cập nhật hóa đơn SAU KHI CẤP SỐ (port từ InBrand Invoice_Invoice_UpdAfterAllocatedX).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái PENDING (Invoice_Invoice_CheckDB với InvoiceStatus.Pending).
+    //  - SourceInvoiceCode phải là INVOICEROOT (lỗi Invoice_Invoice_UpdAfterAllocatedX_SourceInvoiceCode).
+    //  - Hóa đơn phải đã có số (InvoiceNo not null) — lỗi Invoice_Invoice_UpdAfterAllocatedX_InvalidInvoiceNo.
+    //  - Ngày hóa đơn không được ở tương lai (InvaliInvoiceDateUTCAfterSysDate).
+    //  - Ngày hóa đơn phải >= ngày của hóa đơn liền trước (InvoiceNo-1) — Invalid_Before_InvoiceDateUTC
+    //    và <= ngày của hóa đơn liền sau (InvoiceNo+1) — Invalid_Last_InvoiceDateUTC (cùng mẫu TInvoiceCode).
+    //  - Cập nhật phương thức thanh toán, thông tin khách hàng và bảng kê giá trị theo thuế suất.
+    public async Task<InvoiceResult> UpdateAfterAllocatedAsync(int id, InvoiceUpdateReq req)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Pending)
+            return new(false, "Chỉ cập nhật được hóa đơn ở trạng thái PENDING.", inv);
+        if (inv.SourceInvoiceCode != SourceInvoiceCode.Root)
+            return new(false, "Chỉ cập nhật được hóa đơn gốc (SourceInvoiceCode = INVOICEROOT).", inv);
+        if (string.IsNullOrWhiteSpace(inv.InvoiceNo))
+            return new(false, "Hóa đơn chưa được cấp số (InvoiceNo) — không cập nhật được.", inv);
+
+        var date = (req.InvoiceDateUTC ?? inv.InvoiceDateUTC ?? DateTime.Today).Date;
+        if (date > DateTime.Now.Date)
+            return new(false, "Ngày hóa đơn không được ở tương lai.", inv);
+
+        // Kiểm tra tính nhất quán ngày với hóa đơn liền trước/liền sau trong cùng mẫu số.
+        if (!string.IsNullOrWhiteSpace(inv.TInvoiceCode) && long.TryParse(inv.InvoiceNo, out var no))
+        {
+            var siblings = await db.Invoices
+                .Where(i => i.TInvoiceCode == inv.TInvoiceCode && i.Id != inv.Id && i.InvoiceNo != null)
+                .Select(i => new { i.InvoiceNo, i.InvoiceDateUTC })
+                .ToListAsync();
+
+            DateTime? before = null, last = null;
+            foreach (var s in siblings)
+            {
+                if (!long.TryParse(s.InvoiceNo, out var sn) || !s.InvoiceDateUTC.HasValue) continue;
+                if (sn == no - 1) before = s.InvoiceDateUTC.Value.Date;
+                if (sn == no + 1) last = s.InvoiceDateUTC.Value.Date;
+            }
+            if (before.HasValue && before.Value > date)
+                return new(false, $"Ngày hóa đơn phải >= ngày hóa đơn liền trước ({before.Value:dd/MM/yyyy}).", inv);
+            if (last.HasValue && last.Value < date)
+                return new(false, $"Ngày hóa đơn phải <= ngày hóa đơn liền sau ({last.Value:dd/MM/yyyy}).", inv);
+        }
+
+        inv.PaymentMethodCode = Trim(req.PaymentMethodCode);
+        inv.CustomerNNTCode = Trim(req.CustomerNNTCode);
+        inv.CustomerNNTName = Trim(req.CustomerNNTName);
+        inv.CustomerNNTAddress = Trim(req.CustomerNNTAddress);
+        inv.CustomerNNTPhone = Trim(req.CustomerNNTPhone);
+        inv.CustomerNNTBankName = Trim(req.CustomerNNTBankName);
+        inv.CustomerNNTEmail = Trim(req.CustomerNNTEmail);
+        inv.CustomerNNTAccNo = Trim(req.CustomerNNTAccNo);
+        inv.CustomerNNTBuyerName = Trim(req.CustomerNNTBuyerName);
+        inv.CustomerMST = Trim(req.CustomerMST);
+        inv.InvoiceDateUTC = date;
+        inv.TotalValInvoice = req.TotalValInvoice;
+        inv.TotalValVAT = req.TotalValVAT;
+        inv.TotalValPmt = req.TotalValPmt;
+        inv.ValGoodsNotTaxable = req.ValGoodsNotTaxable;
+        inv.ValGoodsNotChargeTax = req.ValGoodsNotChargeTax;
+        inv.ValGoodsVAT5 = req.ValGoodsVAT5;
+        inv.ValVAT5 = req.ValVAT5;
+        inv.ValGoodsVAT10 = req.ValGoodsVAT10;
+        inv.ValVAT10 = req.ValVAT10;
+        inv.UpdAfterAllocatedBy = "system";
+        inv.UpdAfterAllocatedDTimeUTC = DateTime.UtcNow;
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, "Đã cập nhật hóa đơn sau khi cấp số.", inv);
+    }
+
+    private static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     public async Task<InvoiceLifecycleDash> LifecycleDashboardAsync() => new(
         await db.Invoices.CountAsync(),

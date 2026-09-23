@@ -102,6 +102,27 @@ public static class Seeder
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"SourceInvoiceCode\" integer NOT NULL DEFAULT 0");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"InvoiceAdjType\" integer NOT NULL DEFAULT 0");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"RefNo\" text NULL");
+        // Cập nhật hóa đơn sau khi cấp số (port từ InBrand Invoice_Invoice_UpdAfterAllocatedX).
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"PaymentMethodCode\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTCode\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTName\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTAddress\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTPhone\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTBankName\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTEmail\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTAccNo\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerNNTBuyerName\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"CustomerMST\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"TotalValInvoice\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"TotalValVAT\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ValGoodsNotTaxable\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ValGoodsNotChargeTax\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ValGoodsVAT5\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ValVAT5\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ValGoodsVAT10\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ValVAT10\" numeric NOT NULL DEFAULT 0");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"UpdAfterAllocatedBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"UpdAfterAllocatedDTimeUTC\" timestamp NULL");
         sql.Add("CREATE TABLE IF NOT EXISTS minisign.\"InvoiceTemplates\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"TInvoiceCode\" text NOT NULL DEFAULT '', \"TaxCode\" text NOT NULL DEFAULT '', \"InvoiceSerial\" text NOT NULL DEFAULT '', \"StartInvoiceNo\" bigint NOT NULL DEFAULT 1, \"EndInvoiceNo\" bigint NOT NULL DEFAULT 0, \"QtyUsed\" bigint NOT NULL DEFAULT 0, \"LastInvoiceNo\" text NULL, \"LastInvoiceDateUTC\" timestamp NULL, \"EffDateStart\" timestamp NOT NULL DEFAULT now(), \"FlagActive\" boolean NOT NULL DEFAULT true, \"CreatedAt\" timestamp NOT NULL DEFAULT now())");
         sql.Add("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_InvoiceTemplates_OrgId_TInvoiceCode\" ON minisign.\"InvoiceTemplates\" (\"OrgId\", \"TInvoiceCode\")");
         foreach (var s in sql) try { await db.Database.ExecuteSqlRawAsync(s); } catch { }

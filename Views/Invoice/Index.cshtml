@@ -123,6 +123,46 @@
                                 </form>
                             </div></div></div>
                         }
+                        @if (i.Status == InvoiceStatus.Pending && !string.IsNullOrEmpty(i.InvoiceNo))
+                        {
+                            <button class="btn btn-sm btn-outline-secondary ms-1" data-bs-toggle="modal" data-bs-target="#upd-@i.Id"><i class="bi bi-calculator"></i> Cập nhật</button>
+                            <div class="modal fade" id="upd-@i.Id" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+                                <form asp-action="UpdateAfterAllocated" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Cập nhật hóa đơn sau cấp số @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="row g-2">
+                                            <div class="col-md-6"><label class="form-label small text-muted">Phương thức thanh toán</label><input name="paymentMethodCode" class="form-control mono" value="@i.PaymentMethodCode" placeholder="VD: TM/CK" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Ngày hóa đơn</label><input name="invoiceDateUtc" type="date" class="form-control" value="@((i.InvoiceDateUTC ?? DateTime.Today).ToString("yyyy-MM-dd"))" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Mã khách hàng (NNT)</label><input name="customerNNTCode" class="form-control mono" value="@i.CustomerNNTCode" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Tên khách hàng</label><input name="customerNNTName" class="form-control" value="@i.CustomerNNTName" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">MST khách hàng</label><input name="customerMST" class="form-control mono" value="@i.CustomerMST" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Người mua hàng</label><input name="customerNNTBuyerName" class="form-control" value="@i.CustomerNNTBuyerName" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Địa chỉ</label><input name="customerNNTAddress" class="form-control" value="@i.CustomerNNTAddress" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Điện thoại</label><input name="customerNNTPhone" class="form-control" value="@i.CustomerNNTPhone" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Email</label><input name="customerNNTEmail" class="form-control" value="@i.CustomerNNTEmail" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Ngân hàng</label><input name="customerNNTBankName" class="form-control" value="@i.CustomerNNTBankName" /></div>
+                                            <div class="col-md-6"><label class="form-label small text-muted">Số tài khoản</label><input name="customerNNTAccNo" class="form-control mono" value="@i.CustomerNNTAccNo" /></div>
+                                        </div>
+                                        <hr />
+                                        <div class="fw-semibold small mb-2">Bảng kê giá trị theo thuế suất</div>
+                                        <div class="row g-2">
+                                            <div class="col-md-4"><label class="form-label small text-muted">Hàng không chịu thuế</label><input name="valGoodsNotTaxable" type="number" step="1" value="@i.ValGoodsNotTaxable" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Hàng không chịu thuế GTGT</label><input name="valGoodsNotChargeTax" type="number" step="1" value="@i.ValGoodsNotChargeTax" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Giá trị hàng VAT 5%</label><input name="valGoodsVAT5" type="number" step="1" value="@i.ValGoodsVAT5" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Tiền thuế VAT 5%</label><input name="valVAT5" type="number" step="1" value="@i.ValVAT5" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Giá trị hàng VAT 10%</label><input name="valGoodsVAT10" type="number" step="1" value="@i.ValGoodsVAT10" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Tiền thuế VAT 10%</label><input name="valVAT10" type="number" step="1" value="@i.ValVAT10" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Tổng giá trị hàng hóa</label><input name="totalValInvoice" type="number" step="1" value="@i.TotalValInvoice" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Tổng tiền thuế GTGT</label><input name="totalValVAT" type="number" step="1" value="@i.TotalValVAT" class="form-control" /></div>
+                                            <div class="col-md-4"><label class="form-label small text-muted">Tổng thanh toán</label><input name="totalValPmt" type="number" step="1" value="@i.TotalValPmt" class="form-control" /></div>
+                                        </div>
+                                        <div class="small text-muted mt-2">Chỉ cập nhật được khi hóa đơn ở PENDING, đã có số, là hóa đơn gốc; ngày HĐ không ở tương lai và nằm giữa ngày hóa đơn liền trước/liền sau cùng mẫu số (port từ InBrand <span class="mono">Invoice_Invoice_UpdAfterAllocatedX</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-primary btn-sm">Lưu cập nhật</button></div>
+                                </form>
+                            </div></div></div>
+                        }
                         @if (i.Status == InvoiceStatus.Pending)
                         {
                             <button class="btn btn-sm btn-outline-info ms-1" data-bs-toggle="modal" data-bs-target="#approve-@i.Id"><i class="bi bi-check2-square"></i> Duyệt</button>

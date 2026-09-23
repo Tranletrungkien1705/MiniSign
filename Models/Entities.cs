@@ -136,6 +136,33 @@ public class Invoice : IOrgOwned
     public InvoiceAdjType InvoiceAdjType { get; set; } = InvoiceAdjType.Normal;         // Loại điều chỉnh
     public string? RefNo { get; set; }                    // Số tra cứu HĐ gốc bị điều chỉnh/thay thế (port từ Invoice_Invoice.RefNo)
 
+    // Cập nhật hóa đơn SAU KHI CẤP SỐ (port từ InBrand Invoice_Invoice_UpdAfterAllocatedX).
+    // Sau khi hóa đơn đã có số (InvoiceNo), kế toán bổ sung phương thức thanh toán, thông tin khách hàng
+    // và BẢNG KÊ GIÁ TRỊ THEO THUẾ SUẤT (hàng không chịu thuế / không chịu thuế GTGT / chịu VAT 5% / 10%).
+    // Quy tắc: chỉ cập nhật khi hóa đơn ở PENDING, đã có InvoiceNo, SourceInvoiceCode = Root,
+    // ngày hóa đơn không ở tương lai và phải nằm giữa ngày của hóa đơn liền trước (InvoiceNo-1)
+    // và liền sau (InvoiceNo+1) trong cùng mẫu số (TInvoiceCode).
+    public string? PaymentMethodCode { get; set; }        // Phương thức thanh toán (port từ Invoice_Invoice.PaymentMethodCode)
+    public string? CustomerNNTCode { get; set; }          // Mã khách hàng NNT (port từ Invoice_Invoice.CustomerNNTCode)
+    public string? CustomerNNTName { get; set; }          // Tên khách hàng NNT (port từ Invoice_Invoice.CustomerNNTName)
+    public string? CustomerNNTAddress { get; set; }       // Địa chỉ khách hàng (port từ Invoice_Invoice.CustomerNNTAddress)
+    public string? CustomerNNTPhone { get; set; }         // Điện thoại khách hàng (port từ Invoice_Invoice.CustomerNNTPhone)
+    public string? CustomerNNTBankName { get; set; }      // Ngân hàng khách hàng (port từ Invoice_Invoice.CustomerNNTBankName)
+    public string? CustomerNNTEmail { get; set; }         // Email khách hàng (port từ Invoice_Invoice.CustomerNNTEmail)
+    public string? CustomerNNTAccNo { get; set; }         // Số tài khoản khách hàng (port từ Invoice_Invoice.CustomerNNTAccNo)
+    public string? CustomerNNTBuyerName { get; set; }     // Người mua hàng (port từ Invoice_Invoice.CustomerNNTBuyerName)
+    public string? CustomerMST { get; set; }              // MST khách hàng (port từ Invoice_Invoice.CustomerMST)
+    public decimal TotalValInvoice { get; set; }          // Tổng giá trị hàng hóa (port từ Invoice_Invoice.TotalValInvoice)
+    public decimal TotalValVAT { get; set; }              // Tổng tiền thuế GTGT (port từ Invoice_Invoice.TotalValVAT)
+    public decimal ValGoodsNotTaxable { get; set; }       // Giá trị hàng không chịu thuế (port từ Invoice_Invoice.ValGoodsNotTaxable)
+    public decimal ValGoodsNotChargeTax { get; set; }     // Giá trị hàng không chịu thuế GTGT (port từ Invoice_Invoice.ValGoodsNotChargeTax)
+    public decimal ValGoodsVAT5 { get; set; }             // Giá trị hàng chịu VAT 5% (port từ Invoice_Invoice.ValGoodsVAT5)
+    public decimal ValVAT5 { get; set; }                  // Tiền thuế VAT 5% (port từ Invoice_Invoice.ValVAT5)
+    public decimal ValGoodsVAT10 { get; set; }            // Giá trị hàng chịu VAT 10% (port từ Invoice_Invoice.ValGoodsVAT10)
+    public decimal ValVAT10 { get; set; }                 // Tiền thuế VAT 10% (port từ Invoice_Invoice.ValVAT10)
+    public string? UpdAfterAllocatedBy { get; set; }      // Người cập nhật sau cấp số (port từ Invoice_Invoice.LogLUBy)
+    public DateTime? UpdAfterAllocatedDTimeUTC { get; set; }  // Thời điểm cập nhật sau cấp số (port từ Invoice_Invoice.LogLUDTimeUTC)
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -557,4 +557,88 @@ public class InvoiceServiceTests
             Assert.False(r.ok);   // không tìm thấy hóa đơn gốc
         }
     }
+
+    // ===== Cập nhật hóa đơn SAU KHI CẤP SỐ (port từ InBrand Invoice_Invoice_UpdAfterAllocatedX) =====
+
+    private static InvoiceUpdateReq UpdReq(decimal totalPmt = 1000m, DateTime? date = null) => new(
+        "TM", "KH01", "Cty Khách", "Hà Nội", "0900000000", "VCB", "kh@abc.vn", "123456", "Nguyễn Văn A",
+        "0109999999", date ?? DateTime.Today, 1000m, 100m, totalPmt, 0m, 0m, 500m, 25m, 500m, 50m);
+
+    [Fact]
+    public async Task UpdateAfterAllocated_PendingWithInvoiceNo_Succeeds()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "0101234567", "Cty ABC", "Nội dung", 0m);
+            await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            var r = await inv.UpdateAfterAllocatedAsync(c.invoice.Id, UpdReq());
+            Assert.True(r.ok);
+            Assert.Equal("TM", r.invoice!.PaymentMethodCode);
+            Assert.Equal("KH01", r.invoice.CustomerNNTCode);
+            Assert.Equal("0109999999", r.invoice.CustomerMST);
+            Assert.Equal(1000m, r.invoice.TotalValInvoice);
+            Assert.Equal(100m, r.invoice.TotalValVAT);
+            Assert.Equal(500m, r.invoice.ValGoodsVAT5);
+            Assert.Equal(25m, r.invoice.ValVAT5);
+            Assert.Equal(500m, r.invoice.ValGoodsVAT10);
+            Assert.Equal(50m, r.invoice.ValVAT10);
+            Assert.NotNull(r.invoice.UpdAfterAllocatedDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateAfterAllocated_WithoutInvoiceNo_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.UpdateAfterAllocatedAsync(c.invoice!.Id, UpdReq());
+            Assert.False(r.ok);   // chưa cấp số → không cập nhật được
+        }
+    }
+
+    [Fact]
+    public async Task UpdateAfterAllocated_NotPending_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            await inv.ApproveAsync(c.invoice.Id, "0000001", "u1");   // → APPROVED
+            var r = await inv.UpdateAfterAllocatedAsync(c.invoice.Id, UpdReq());
+            Assert.False(r.ok);   // không còn PENDING
+        }
+    }
+
+    [Fact]
+    public async Task UpdateAfterAllocated_FutureDate_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.AllocateAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            var r = await inv.UpdateAfterAllocatedAsync(c.invoice.Id, UpdReq(date: DateTime.Today.AddDays(5)));
+            Assert.False(r.ok);   // ngày hóa đơn ở tương lai
+        }
+    }
+
+    [Fact]
+    public async Task UpdateAfterAllocated_BeforePreviousInvoiceDate_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            // Hóa đơn liền trước (số 0000001) có ngày hôm nay.
+            var a = await inv.CreateAsync("HD-001", "", "", "a", 0m);
+            await inv.AllocateAsync(a.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            // Hóa đơn liền sau (số 0000002) — cập nhật với ngày trước hóa đơn liền trước.
+            var b = await inv.CreateAsync("HD-002", "", "", "b", 0m);
+            await inv.AllocateAsync(b.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            var r = await inv.UpdateAfterAllocatedAsync(b.invoice.Id, UpdReq(date: DateTime.Today.AddDays(-1)));
+            Assert.False(r.ok);   // ngày HĐ < ngày hóa đơn liền trước
+        }
+    }
 }

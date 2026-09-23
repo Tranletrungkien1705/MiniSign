@@ -192,6 +192,24 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
         TempData[r.ok ? "Success" : "Error"] = r.msg;
         return RedirectToAction(nameof(Index));
     }
+
+    // Cập nhật hóa đơn SAU KHI CẤP SỐ (port từ InBrand Invoice_Invoice_UpdAfterAllocatedX).
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateAfterAllocated(int id, string? paymentMethodCode, string? customerNNTCode,
+        string? customerNNTName, string? customerNNTAddress, string? customerNNTPhone, string? customerNNTBankName,
+        string? customerNNTEmail, string? customerNNTAccNo, string? customerNNTBuyerName, string? customerMST,
+        DateTime? invoiceDateUtc, decimal totalValInvoice, decimal totalValVAT, decimal totalValPmt,
+        decimal valGoodsNotTaxable, decimal valGoodsNotChargeTax, decimal valGoodsVAT5, decimal valVAT5,
+        decimal valGoodsVAT10, decimal valVAT10)
+    {
+        var req = new InvoiceUpdateReq(paymentMethodCode, customerNNTCode, customerNNTName, customerNNTAddress,
+            customerNNTPhone, customerNNTBankName, customerNNTEmail, customerNNTAccNo, customerNNTBuyerName,
+            customerMST, invoiceDateUtc, totalValInvoice, totalValVAT, totalValPmt, valGoodsNotTaxable,
+            valGoodsNotChargeTax, valGoodsVAT5, valVAT5, valGoodsVAT10, valVAT10);
+        var r = await invoices.UpdateAfterAllocatedAsync(id, req);
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
 }
 
 public class OrgController(AppDbContext db) : Controller

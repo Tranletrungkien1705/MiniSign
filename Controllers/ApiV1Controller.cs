@@ -204,6 +204,21 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
     }
 
+    // Cập nhật hóa đơn SAU KHI CẤP SỐ (port từ InBrand Invoice_Invoice_UpdAfterAllocatedX).
+    // Chỉ khi PENDING + đã có InvoiceNo + SourceInvoiceCode = Root; ngày HĐ không tương lai và
+    // nằm giữa ngày hóa đơn liền trước/liền sau cùng mẫu số. Cập nhật phương thức thanh toán,
+    // thông tin khách hàng và bảng kê giá trị theo thuế suất (VAT 5%/10%, không chịu thuế).
+    [HttpPost("invoices/{id:int}/update-after-allocated")]
+    public async Task<IActionResult> UpdateAfterAllocated(int id, [FromBody] InvoiceUpdateBody r)
+    {
+        var req = new InvoiceUpdateReq(r.PaymentMethodCode, r.CustomerNNTCode, r.CustomerNNTName, r.CustomerNNTAddress,
+            r.CustomerNNTPhone, r.CustomerNNTBankName, r.CustomerNNTEmail, r.CustomerNNTAccNo, r.CustomerNNTBuyerName,
+            r.CustomerMST, r.InvoiceDateUTC, r.TotalValInvoice, r.TotalValVAT, r.TotalValPmt, r.ValGoodsNotTaxable,
+            r.ValGoodsNotChargeTax, r.ValGoodsVAT5, r.ValVAT5, r.ValGoodsVAT10, r.ValVAT10);
+        var res = await invoices.UpdateAfterAllocatedAsync(id, req);
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
     // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
     [HttpGet("invoices/lifecycle")]
     public async Task<IActionResult> InvoiceLifecycle()
@@ -224,7 +239,12 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ICache 
         i.DeleteBy, i.DeleteDTimeUTC, i.DeleteReason, i.AttachedDelFilePath,
         i.FlagChange, i.ChangeBy, i.ChangeDTimeUTC, i.ChangeReason, i.CreatedAt, i.UpdatedAt,
         sourceInvoiceCode = (int)i.SourceInvoiceCode, sourceInvoiceCodeText = i.SourceInvoiceCode.ToString(),
-        invoiceAdjType = (int)i.InvoiceAdjType, invoiceAdjTypeText = i.InvoiceAdjType.ToString(), i.RefNo
+        invoiceAdjType = (int)i.InvoiceAdjType, invoiceAdjTypeText = i.InvoiceAdjType.ToString(), i.RefNo,
+        i.PaymentMethodCode, i.CustomerNNTCode, i.CustomerNNTName, i.CustomerNNTAddress, i.CustomerNNTPhone,
+        i.CustomerNNTBankName, i.CustomerNNTEmail, i.CustomerNNTAccNo, i.CustomerNNTBuyerName, i.CustomerMST,
+        i.TotalValInvoice, i.TotalValVAT, i.ValGoodsNotTaxable, i.ValGoodsNotChargeTax,
+        i.ValGoodsVAT5, i.ValVAT5, i.ValGoodsVAT10, i.ValVAT10,
+        i.UpdAfterAllocatedBy, i.UpdAfterAllocatedDTimeUTC
     };
 }
 
@@ -244,3 +264,26 @@ public class InvoiceAdjustReq { public string? RefNo { get; set; } public int So
 public class InvoiceApproveReq { public string? InvoiceNo { get; set; } public string? ApprBy { get; set; } }
 public class InvoiceAllocateReq { public string? TInvoiceCode { get; set; } public DateTime? InvoiceDateUTC { get; set; } public string? AllocateBy { get; set; } }
 public class InvoiceIssueReq { public string? IssuedBy { get; set; } }
+public class InvoiceUpdateBody
+{
+    public string? PaymentMethodCode { get; set; }
+    public string? CustomerNNTCode { get; set; }
+    public string? CustomerNNTName { get; set; }
+    public string? CustomerNNTAddress { get; set; }
+    public string? CustomerNNTPhone { get; set; }
+    public string? CustomerNNTBankName { get; set; }
+    public string? CustomerNNTEmail { get; set; }
+    public string? CustomerNNTAccNo { get; set; }
+    public string? CustomerNNTBuyerName { get; set; }
+    public string? CustomerMST { get; set; }
+    public DateTime? InvoiceDateUTC { get; set; }
+    public decimal TotalValInvoice { get; set; }
+    public decimal TotalValVAT { get; set; }
+    public decimal TotalValPmt { get; set; }
+    public decimal ValGoodsNotTaxable { get; set; }
+    public decimal ValGoodsNotChargeTax { get; set; }
+    public decimal ValGoodsVAT5 { get; set; }
+    public decimal ValVAT5 { get; set; }
+    public decimal ValGoodsVAT10 { get; set; }
+    public decimal ValVAT10 { get; set; }
+}
