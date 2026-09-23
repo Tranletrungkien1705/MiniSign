@@ -219,6 +219,24 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ILicens
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
     }
 
+    // Đánh dấu hóa đơn ĐÃ GỬI EMAIL (port từ InBrand Invoice_Invoice_UpdMailSentDTimeUTCX).
+    // Chỉ khi ISSUED + chưa gửi email; ghi MailSentDTimeUTC + SendEmailDTimeUTC + SendEmailBy.
+    [HttpPost("invoices/{id:int}/mail-sent")]
+    public async Task<IActionResult> MarkMailSent(int id, [FromBody] InvoiceMailSentReq r)
+    {
+        var res = await invoices.MarkMailSentAsync(id, r.SendBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
+    // Đẩy hóa đơn LÊN CỔNG THÔNG TIN ĐIỆN TỬ (port từ InBrand Invoice_Invoice_Issued_UpdFlagPushOutSiteX).
+    // Chỉ khi ISSUED/DELETED + FlagPushOutSite còn rỗng; ghi FlagPushOutSite + PushOutSiteBy.
+    [HttpPost("invoices/{id:int}/push-out-site")]
+    public async Task<IActionResult> PushOutSite(int id, [FromBody] InvoicePushOutSiteReq r)
+    {
+        var res = await invoices.PushOutSiteAsync(id, r.PushBy ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
     // Thống kê hóa đơn theo trạng thái vòng đời (port từ InBrand InvoiceStatus).
     [HttpGet("invoices/lifecycle")]
     public async Task<IActionResult> InvoiceLifecycle()
@@ -279,7 +297,9 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ILicens
         i.CustomerNNTBankName, i.CustomerNNTEmail, i.CustomerNNTAccNo, i.CustomerNNTBuyerName, i.CustomerMST,
         i.TotalValInvoice, i.TotalValVAT, i.ValGoodsNotTaxable, i.ValGoodsNotChargeTax,
         i.ValGoodsVAT5, i.ValVAT5, i.ValGoodsVAT10, i.ValVAT10,
-        i.UpdAfterAllocatedBy, i.UpdAfterAllocatedDTimeUTC
+        i.UpdAfterAllocatedBy, i.UpdAfterAllocatedDTimeUTC,
+        i.MailSentDTimeUTC, i.SendEmailDTimeUTC, i.SendEmailBy, i.MailLogLUBy, i.MailLogLUDTimeUTC,
+        i.FlagPushOutSite, i.PushOutSiteBy, i.PushOutSiteDTimeUTC
     };
 }
 
@@ -299,6 +319,8 @@ public class InvoiceAdjustReq { public string? RefNo { get; set; } public int So
 public class InvoiceApproveReq { public string? InvoiceNo { get; set; } public string? ApprBy { get; set; } }
 public class InvoiceAllocateReq { public string? TInvoiceCode { get; set; } public DateTime? InvoiceDateUTC { get; set; } public string? AllocateBy { get; set; } }
 public class InvoiceIssueReq { public string? IssuedBy { get; set; } }
+public class InvoiceMailSentReq { public string? SendBy { get; set; } }
+public class InvoicePushOutSiteReq { public string? PushBy { get; set; } }
 public class InvoiceUpdateBody
 {
     public string? PaymentMethodCode { get; set; }

@@ -641,4 +641,99 @@ public class InvoiceServiceTests
             Assert.False(r.ok);   // ngày HĐ < ngày hóa đơn liền trước
         }
     }
+
+    // ===== Đánh dấu hóa đơn ĐÃ GỬI EMAIL (port từ InBrand Invoice_Invoice_UpdMailSentDTimeUTCX) =====
+
+    [Fact]
+    public async Task MarkMailSent_Issued_Succeeds()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);   // HD-001 đã ISSUED
+            var r = await inv.MarkMailSentAsync(issued.Id, "ketoan01");
+            Assert.True(r.ok);
+            Assert.NotNull(r.invoice!.MailSentDTimeUTC);
+            Assert.NotNull(r.invoice.SendEmailDTimeUTC);
+            Assert.Equal("ketoan01", r.invoice.SendEmailBy);
+            Assert.Equal("ketoan01", r.invoice.MailLogLUBy);
+            Assert.NotNull(r.invoice.MailLogLUDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task MarkMailSent_Pending_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.MarkMailSentAsync(c.invoice!.Id, "u1");
+            Assert.False(r.ok);   // chưa phát hành → không đánh dấu gửi email được
+            Assert.Null(r.invoice!.MailSentDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task MarkMailSent_AlreadySent_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);
+            await inv.MarkMailSentAsync(issued.Id, "u1");
+            var r = await inv.MarkMailSentAsync(issued.Id, "u1");
+            Assert.False(r.ok);   // đã gửi email → không đánh dấu lại
+        }
+    }
+
+    // ===== Đẩy hóa đơn lên cổng thông tin điện tử (port từ InBrand Invoice_Invoice_Issued_UpdFlagPushOutSiteX) =====
+
+    [Fact]
+    public async Task PushOutSite_Issued_Succeeds()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);   // HD-001 đã ISSUED
+            var r = await inv.PushOutSiteAsync(issued.Id, "ketoan01");
+            Assert.True(r.ok);
+            Assert.NotNull(r.invoice!.FlagPushOutSite);
+            Assert.Equal("ketoan01", r.invoice.PushOutSiteBy);
+            Assert.NotNull(r.invoice.PushOutSiteDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task PushOutSite_Deleted_Succeeds()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);
+            await inv.DeleteAsync(issued.Id, "sai", "u1", null);   // HD-001 → DELETED
+            var r = await inv.PushOutSiteAsync(issued.Id, "ketoan01");
+            Assert.True(r.ok);   // DELETED cũng được đẩy cổng
+            Assert.NotNull(r.invoice!.FlagPushOutSite);
+        }
+    }
+
+    [Fact]
+    public async Task PushOutSite_Pending_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.PushOutSiteAsync(c.invoice!.Id, "u1");
+            Assert.False(r.ok);   // chưa phát hành → không đẩy cổng được
+            Assert.Null(r.invoice!.FlagPushOutSite);
+        }
+    }
+
+    [Fact]
+    public async Task PushOutSite_AlreadyPushed_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var issued = await SeedIssued(inv);
+            await inv.PushOutSiteAsync(issued.Id, "u1");
+            var r = await inv.PushOutSiteAsync(issued.Id, "u1");
+            Assert.False(r.ok);   // đã đẩy cổng → không đẩy lại (ExistFlagPushOutSite)
+        }
+    }
 }

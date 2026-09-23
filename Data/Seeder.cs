@@ -152,6 +152,16 @@ public static class Seeder
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"ValVAT10\" numeric NOT NULL DEFAULT 0");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"UpdAfterAllocatedBy\" text NULL");
         sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"UpdAfterAllocatedDTimeUTC\" timestamp NULL");
+        // Đẩy hóa đơn lên cổng thông tin điện tử (port từ InBrand Invoice_Invoice_Issued_UpdFlagPushOutSiteX).
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"FlagPushOutSite\" timestamp NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"PushOutSiteBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"PushOutSiteDTimeUTC\" timestamp NULL");
+        // Đánh dấu hóa đơn đã gửi email (port từ InBrand Invoice_Invoice_UpdMailSentDTimeUTCX).
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"MailSentDTimeUTC\" timestamp NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"SendEmailDTimeUTC\" timestamp NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"SendEmailBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"MailLogLUBy\" text NULL");
+        sql.Add("ALTER TABLE minisign.\"Invoices\" ADD COLUMN IF NOT EXISTS \"MailLogLUDTimeUTC\" timestamp NULL");
         sql.Add("CREATE TABLE IF NOT EXISTS minisign.\"InvoiceTemplates\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"TInvoiceCode\" text NOT NULL DEFAULT '', \"TaxCode\" text NOT NULL DEFAULT '', \"InvoiceSerial\" text NOT NULL DEFAULT '', \"StartInvoiceNo\" bigint NOT NULL DEFAULT 1, \"EndInvoiceNo\" bigint NOT NULL DEFAULT 0, \"QtyUsed\" bigint NOT NULL DEFAULT 0, \"LastInvoiceNo\" text NULL, \"LastInvoiceDateUTC\" timestamp NULL, \"EffDateStart\" timestamp NOT NULL DEFAULT now(), \"FlagActive\" boolean NOT NULL DEFAULT true, \"CreatedAt\" timestamp NOT NULL DEFAULT now())");
         sql.Add("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_InvoiceTemplates_OrgId_TInvoiceCode\" ON minisign.\"InvoiceTemplates\" (\"OrgId\", \"TInvoiceCode\")");
         // Hạn mức cấp số theo MST (port từ InBrand Invoice_license).

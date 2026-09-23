@@ -83,6 +83,8 @@
                         @if (i.Status == InvoiceStatus.Deleted && !string.IsNullOrEmpty(i.DeleteReason)) { <div class="text-muted" style="font-size:11px">@i.DeleteReason</div> }
                         @if (!i.FlagChange) { <div class="text-warning" style="font-size:11px"><i class="bi bi-arrow-repeat"></i> Đã thay thế@(string.IsNullOrEmpty(i.ChangeReason) ? "" : ": " + i.ChangeReason)</div> }
                         @if (i.SourceInvoiceCode != SourceInvoiceCode.Root) { <div class="text-info" style="font-size:11px"><i class="bi bi-pencil-square"></i> @(i.SourceInvoiceCode == SourceInvoiceCode.Adj ? "HĐ điều chỉnh" : "HĐ thay thế")@(i.InvoiceAdjType == InvoiceAdjType.AdjIncrease ? " (Tăng)" : i.InvoiceAdjType == InvoiceAdjType.AdjDecrease ? " (Giảm)" : "")@(string.IsNullOrEmpty(i.RefNo) ? "" : " — gốc: " + i.RefNo)</div> }
+                        @if (i.MailSentDTimeUTC != null) { <div class="text-success" style="font-size:11px"><i class="bi bi-envelope-check"></i> Đã gửi email @i.MailSentDTimeUTC.Value.ToLocalTime().ToString("dd/MM HH:mm")@(string.IsNullOrEmpty(i.SendEmailBy) ? "" : " — " + i.SendEmailBy)</div> }
+                        @if (i.FlagPushOutSite != null) { <div class="text-primary" style="font-size:11px"><i class="bi bi-cloud-arrow-up"></i> Đã đẩy cổng @i.FlagPushOutSite.Value.ToLocalTime().ToString("dd/MM HH:mm")@(string.IsNullOrEmpty(i.PushOutSiteBy) ? "" : " — " + i.PushOutSiteBy)</div> }
                     </td>
                     <td><span class="badge bg-@Badge(i.SignStatus)">@Label(i.SignStatus)</span>
                         @if (i.SignStatus == SignStatus.Failed && !string.IsNullOrEmpty(i.SignError)) { <div class="text-danger" style="font-size:11px">@i.SignError</div> }
@@ -207,6 +209,36 @@
                                         <div class="small text-muted">Chỉ hủy được khi hóa đơn ở trạng thái PENDING/APPROVED (port từ InBrand <span class="mono">Invoice_Invoice_Cancel</span>).</div>
                                     </div>
                                     <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-danger btn-sm">Xác nhận hủy</button></div>
+                                </form>
+                            </div></div></div>
+                        }
+                        @if (i.Status == InvoiceStatus.Issued && i.MailSentDTimeUTC == null)
+                        {
+                            <button class="btn btn-sm btn-outline-primary ms-1" data-bs-toggle="modal" data-bs-target="#mail-@i.Id"><i class="bi bi-envelope"></i> Gửi email</button>
+                            <div class="modal fade" id="mail-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                <form asp-action="MarkMailSent" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Đánh dấu đã gửi email hóa đơn @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="mb-2"><label class="form-label small text-muted">Người gửi email</label><input name="sendBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                        <div class="small text-muted">Chỉ đánh dấu được khi hóa đơn ở trạng thái ISSUED và chưa gửi email (port từ InBrand <span class="mono">Invoice_Invoice_UpdMailSentDTimeUTCX</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-primary btn-sm">Xác nhận đã gửi</button></div>
+                                </form>
+                            </div></div></div>
+                        }
+                        @if ((i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Deleted) && i.FlagPushOutSite == null)
+                        {
+                            <button class="btn btn-sm btn-outline-primary ms-1" data-bs-toggle="modal" data-bs-target="#push-@i.Id"><i class="bi bi-cloud-arrow-up"></i> Đẩy cổng</button>
+                            <div class="modal fade" id="push-@i.Id" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+                                <form asp-action="PushOutSite" method="post">@Html.AntiForgeryToken()
+                                    <input type="hidden" name="id" value="@i.Id" />
+                                    <div class="modal-header"><h6 class="modal-title">Đẩy hóa đơn lên cổng thông tin điện tử @i.InvoiceCode</h6><button class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body text-start">
+                                        <div class="mb-2"><label class="form-label small text-muted">Người đẩy lên cổng</label><input name="pushBy" class="form-control" placeholder="VD: ketoan01" /></div>
+                                        <div class="small text-muted">Chỉ đẩy được khi hóa đơn ở trạng thái ISSUED/DELETED và chưa đẩy lần nào (port từ InBrand <span class="mono">Invoice_Invoice_Issued_UpdFlagPushOutSiteX</span>).</div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Đóng</button><button class="btn btn-primary btn-sm">Xác nhận đẩy cổng</button></div>
                                 </form>
                             </div></div></div>
                         }

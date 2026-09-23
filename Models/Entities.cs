@@ -169,6 +169,25 @@ public class Invoice : IOrgOwned
     public string? UpdAfterAllocatedBy { get; set; }      // Người cập nhật sau cấp số (port từ Invoice_Invoice.LogLUBy)
     public DateTime? UpdAfterAllocatedDTimeUTC { get; set; }  // Thời điểm cập nhật sau cấp số (port từ Invoice_Invoice.LogLUDTimeUTC)
 
+    // Đánh dấu hóa đơn ĐÃ GỬI EMAIL cho khách hàng (port từ InBrand Invoice_Invoice_UpdMailSentDTimeUTCX).
+    // Quy tắc: chỉ đánh dấu được khi hóa đơn ở trạng thái ISSUED (đã phát hành) và CHƯA gửi email
+    // (MailSentDTimeUTC còn rỗng — lỗi Invoice_Invoice_UpdMailSentDTimeUTCX_Invalid).
+    // Khi gửi ghi MailSentDTimeUTC + SendEmailDTimeUTC + SendEmailBy + LogLUBy + LogLUDTimeUTC.
+    public DateTime? MailSentDTimeUTC { get; set; }       // Thời điểm gửi email (port từ Invoice_Invoice.MailSentDTimeUTC)
+    public DateTime? SendEmailDTimeUTC { get; set; }      // Thời điểm gửi email (port từ Invoice_Invoice.SendEmailDTimeUTC)
+    public string? SendEmailBy { get; set; }              // Người gửi email (port từ Invoice_Invoice.SendEmailBy)
+    public string? MailLogLUBy { get; set; }              // Người cập nhật gần nhất (port từ Invoice_Invoice.LogLUBy)
+    public DateTime? MailLogLUDTimeUTC { get; set; }      // Thời điểm cập nhật gần nhất (port từ Invoice_Invoice.LogLUDTimeUTC)
+
+    // Đẩy hóa đơn LÊN CỔNG THÔNG TIN ĐIỆN TỬ (push out site) — port từ InBrand
+    // Invoice_Invoice_Issued_UpdFlagPushOutSiteX.
+    // Quy tắc: hóa đơn phải tồn tại và đang ở trạng thái ISSUED hoặc DELETED;
+    // FlagPushOutSite phải còn rỗng (chưa đẩy) — lỗi Invoice_Invoice_Issued_UpdFlagPushOutSiteX_ExistFlagPushOutSite.
+    // Khi đẩy ghi FlagPushOutSite = thời điểm đẩy + LogLUBy + LogLUDTimeUTC.
+    public DateTime? FlagPushOutSite { get; set; }        // Thời điểm đẩy lên cổng (port từ Invoice_Invoice.FlagPushOutSite)
+    public string? PushOutSiteBy { get; set; }            // Người đẩy lên cổng (port từ Invoice_Invoice.LogLUBy)
+    public DateTime? PushOutSiteDTimeUTC { get; set; }    // Thời điểm cập nhật gần nhất (port từ Invoice_Invoice.LogLUDTimeUTC)
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
@@ -273,11 +292,11 @@ public record InvoiceTotalCheck(
     bool ok,                 // tổng khai báo khớp tổng tính lại (trong dung sai)
     string message,          // thông điệp kết luận
     VatType vatType,         // kiểu thuế của mẫu số (quyết định cách làm tròn)
-    decimal calcTotalValInvoice,   // tổng giá trị hàng hóa tính lại từ dòng chi tiết
-    decimal calcTotalValVAT,       // tổng tiền thuế GTGT tính lại
-    decimal calcTotalValPmt,       // tổng thanh toán tính lại = giá trị + thuế
-    decimal inputTotalValInvoice,  // tổng giá trị hàng hóa đã khai báo trên hóa đơn
-    decimal inputTotalValVAT,      // tổng tiền thuế GTGT đã khai báo
-    decimal inputTotalValPmt,      // tổng thanh toán đã khai báo
-    decimal delta,                 // dung sai cho phép
-    int lineCount);                // số dòng chi tiết đã dùng để tính
+    decimal calcTotalValInvoice = 0,   // tổng giá trị hàng hóa tính lại từ dòng chi tiết
+    decimal calcTotalValVAT = 0,       // tổng tiền thuế GTGT tính lại
+    decimal calcTotalValPmt = 0,       // tổng thanh toán tính lại = giá trị + thuế
+    decimal inputTotalValInvoice = 0,  // tổng giá trị hàng hóa đã khai báo trên hóa đơn
+    decimal inputTotalValVAT = 0,      // tổng tiền thuế GTGT đã khai báo
+    decimal inputTotalValPmt = 0,      // tổng thanh toán đã khai báo
+    decimal delta = 0,                 // dung sai cho phép
+    int lineCount = 0);                // số dòng chi tiết đã dùng để tính

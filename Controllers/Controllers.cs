@@ -210,6 +210,26 @@ public class InvoiceController(IInvoiceService invoices, ISignService svc) : Con
         TempData[r.ok ? "Success" : "Error"] = r.msg;
         return RedirectToAction(nameof(Index));
     }
+
+    // Đánh dấu hóa đơn ĐÃ GỬI EMAIL (port từ InBrand Invoice_Invoice_UpdMailSentDTimeUTCX).
+    // Chỉ khi ISSUED + chưa gửi email.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> MarkMailSent(int id, string? sendBy)
+    {
+        var r = await invoices.MarkMailSentAsync(id, sendBy ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
+
+    // Đẩy hóa đơn lên cổng thông tin điện tử (port từ InBrand Invoice_Invoice_Issued_UpdFlagPushOutSiteX).
+    // Chỉ khi ISSUED/DELETED + chưa đẩy.
+    [HttpPost, ValidateAntiForgeryToken]
+    public async Task<IActionResult> PushOutSite(int id, string? pushBy)
+    {
+        var r = await invoices.PushOutSiteAsync(id, pushBy ?? "");
+        TempData[r.ok ? "Success" : "Error"] = r.msg;
+        return RedirectToAction(nameof(Index));
+    }
 }
 
 // Hạn mức cấp số hóa đơn theo MST (port từ InBrand Invoice_license).

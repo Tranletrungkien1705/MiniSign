@@ -59,6 +59,8 @@ public interface IInvoiceService
     Task<InvoiceResult> ChangeAsync(int id, string reason, string changeBy);
     Task<InvoiceResult> AdjustAsync(int id, string refNo, SourceInvoiceCode source, InvoiceAdjType adjType, string reason, string adjustBy);
     Task<InvoiceResult> UpdateAfterAllocatedAsync(int id, InvoiceUpdateReq req);
+    Task<InvoiceResult> MarkMailSentAsync(int id, string sendBy);
+    Task<InvoiceResult> PushOutSiteAsync(int id, string pushBy);
     Task<List<InvoiceLine>> LinesAsync(int invoiceId);
     Task<InvoiceResult> AddLineAsync(int invoiceId, InvoiceLineReq req);
     Task<InvoiceTotalCheck> CheckTotalAsync(int invoiceId, VatType vatType);
@@ -462,6 +464,57 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return new(true, "Đã cập nhật hóa đơn sau khi cấp số.", inv);
+    }
+
+    // Đánh dấu hóa đơn ĐÃ GỬI EMAIL (port từ InBrand Invoice_Invoice_UpdMailSentDTimeUTCX).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái ISSUED (Invoice_Invoice_CheckDB với InvoiceStatus.Issued).
+    //  - Hóa đơn CHƯA gửi email (MailSentDTimeUTC còn rỗng) — lỗi Invoice_Invoice_UpdMailSentDTimeUTCX_Invalid.
+    //  - Khi gửi ghi MailSentDTimeUTC + SendEmailDTimeUTC + SendEmailBy + LogLUBy + LogLUDTimeUTC.
+    public async Task<InvoiceResult> MarkMailSentAsync(int id, string sendBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Issued)
+            return new(false, "Chỉ đánh dấu gửi email được khi hóa đơn ở trạng thái ISSUED (đã phát hành).", inv);
+        if (inv.MailSentDTimeUTC.HasValue)
+            return new(false, "Hóa đơn đã được đánh dấu gửi email trước đó.", inv);
+
+        var now = DateTime.UtcNow;
+        var by = string.IsNullOrWhiteSpace(sendBy) ? "system" : sendBy.Trim();
+        inv.MailSentDTimeUTC = now;
+        inv.SendEmailDTimeUTC = now;
+        inv.SendEmailBy = by;
+        inv.MailLogLUBy = by;
+        inv.MailLogLUDTimeUTC = now;
+        inv.UpdatedAt = now;
+        await db.SaveChangesAsync();
+        return new(true, "Đã đánh dấu hóa đơn đã gửi email.", inv);
+    }
+
+    // Đẩy hóa đơn LÊN CỔNG THÔNG TIN ĐIỆN TỬ (port từ InBrand Invoice_Invoice_Issued_UpdFlagPushOutSiteX).
+    // Quy tắc InBrand:
+    //  - Hóa đơn phải tồn tại và đang ở trạng thái ISSUED hoặc DELETED
+    //    (Invoice_Invoice_CheckDB với strInvoiceStatusListToCheck = "ISSUED, DELETED").
+    //  - FlagPushOutSite phải còn rỗng (chưa đẩy) — lỗi Invoice_Invoice_Issued_UpdFlagPushOutSiteX_ExistFlagPushOutSite.
+    //  - Khi đẩy ghi FlagPushOutSite = thời điểm đẩy + LogLUBy + LogLUDTimeUTC.
+    public async Task<InvoiceResult> PushOutSiteAsync(int id, string pushBy)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (inv.Status != InvoiceStatus.Issued && inv.Status != InvoiceStatus.Deleted)
+            return new(false, "Chỉ đẩy lên cổng được khi hóa đơn ở trạng thái ISSUED hoặc DELETED.", inv);
+        if (inv.FlagPushOutSite.HasValue)
+            return new(false, "Hóa đơn đã được đẩy lên cổng thông tin điện tử trước đó.", inv);
+
+        var now = DateTime.UtcNow;
+        var by = string.IsNullOrWhiteSpace(pushBy) ? "system" : pushBy.Trim();
+        inv.FlagPushOutSite = now;
+        inv.PushOutSiteBy = by;
+        inv.PushOutSiteDTimeUTC = now;
+        inv.UpdatedAt = now;
+        await db.SaveChangesAsync();
+        return new(true, "Đã đẩy hóa đơn lên cổng thông tin điện tử.", inv);
     }
 
     // Danh sách dòng chi tiết của một hóa đơn (port từ InBrand Invoice_InvoiceDtl).
