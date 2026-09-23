@@ -67,6 +67,28 @@ app.MapPost("/api/verify", async (VerifyDto dto, ISignService svc) =>
     return Results.Ok(new { valid = r.valid, msg = r.msg, subject = r.subject, serial = r.serial, signedAt = r.signedAt });
 });
 
+// API ký SHA1withRSA — thuật toán hóa đơn điện tử (port từ InBrand signTTHD).
+app.MapPost("/api/sign/sha1", async (SignDto dto, ISignService svc) =>
+{
+    var r = await svc.SignAsync(dto.CertId, dto.DocName ?? "document", dto.Content ?? "", SignAlgorithm.SHA1withRSA);
+    return r.ok ? Results.Ok(new { hash = r.hash, signature = r.signature, serial = r.serial, algo = r.algo })
+                : Results.BadRequest(new { error = r.msg });
+});
+
+// API verify SHA1withRSA (port từ InBrand SignatureVerify).
+app.MapPost("/api/verify/sha1", async (VerifyDto dto, ISignService svc) =>
+{
+    var r = await svc.VerifyAsync(dto.Serial ?? "", dto.Content ?? "", dto.Signature ?? "", SignAlgorithm.SHA1withRSA);
+    return Results.Ok(new { valid = r.valid, msg = r.msg, subject = r.subject, serial = r.serial, signedAt = r.signedAt });
+});
+
+// Tra cứu thông tin chứng thư công khai theo serial (port từ GetCertificateInfo).
+app.MapGet("/api/certinfo/{serial}", async (string serial, ISignService svc) =>
+{
+    var info = await svc.CertInfoAsync(serial);
+    return info == null ? Results.NotFound(new { error = "Không tìm thấy chứng thư." }) : Results.Ok(info);
+});
+
 app.MapPost("/api/orgs/register", async (RegisterOrgDto dto, AppDbContext db) =>
 {
     if (string.IsNullOrWhiteSpace(dto.Name)) return Results.BadRequest(new { error = "Cần Name." });

@@ -92,4 +92,48 @@ public class SignServiceTests
             Assert.Single(logs);
         }
     }
+
+    // Port từ InBrand: ký/xác thực hóa đơn điện tử bằng SHA1withRSA (signTTHD/SignatureVerify).
+    [Fact]
+    public async Task Sign_Sha1_ThenVerify_Valid()
+    {
+        var (db, svc, conn) = NewSvc(); using (conn)
+        {
+            var (_, _, id) = await svc.CreateCertAsync("Cty ABC", 3);
+            var c = await svc.GetCertAsync(id);
+            var sign = await svc.SignAsync(id, "hoadon.xml", "Hóa đơn 1C26TAA-00000001", SignAlgorithm.SHA1withRSA);
+            Assert.True(sign.ok);
+            Assert.Equal("SHA1withRSA", sign.algo);
+            var v = await svc.VerifyAsync(c!.Serial, "Hóa đơn 1C26TAA-00000001", sign.signature!, SignAlgorithm.SHA1withRSA);
+            Assert.True(v.valid);
+        }
+    }
+
+    [Fact]
+    public async Task Verify_Sha1_WrongAlgorithm_Invalid()
+    {
+        var (db, svc, conn) = NewSvc(); using (conn)
+        {
+            var (_, _, id) = await svc.CreateCertAsync("Cty ABC", 3);
+            var c = await svc.GetCertAsync(id);
+            var sign = await svc.SignAsync(id, "hoadon.xml", "Hóa đơn ABC", SignAlgorithm.SHA1withRSA);
+            // Xác thực bằng SHA256 → không khớp thuật toán → không hợp lệ
+            var v = await svc.VerifyAsync(c!.Serial, "Hóa đơn ABC", sign.signature!, SignAlgorithm.SHA256withRSA);
+            Assert.False(v.valid);
+        }
+    }
+
+    [Fact]
+    public async Task CertInfo_ReturnsMetadata()
+    {
+        var (db, svc, conn) = NewSvc(); using (conn)
+        {
+            var (_, _, id) = await svc.CreateCertAsync("Cty ABC", 3);
+            var c = await svc.GetCertAsync(id);
+            var info = await svc.CertInfoAsync(c!.Serial);
+            Assert.NotNull(info);
+            Assert.Equal(c.Serial, info!.serial);
+            Assert.True(info.usable);
+        }
+    }
 }

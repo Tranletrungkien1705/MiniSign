@@ -4,6 +4,9 @@ public interface IOrgOwned { Guid OrgId { get; set; } }
 
 public enum CertStatus { Active = 0, Revoked = 1, Expired = 2 }
 
+// Thuật toán ký số. Port từ InBrand: hóa đơn điện tử dùng SHA1WithRSA (signTTHD/SignatureVerify).
+public enum SignAlgorithm { SHA256withRSA = 0, SHA1withRSA = 1 }
+
 public class Org
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -21,7 +24,7 @@ public class Certificate : IOrgOwned
     public string Serial { get; set; } = "";            // Số serial (GLOBAL unique — verify công khai)
     public string PublicKeyPem { get; set; } = "";
     public string PrivateKeyPem { get; set; } = "";     // (lab: lưu thẳng; thực tế nằm trong HSM/USB token)
-    public string Algorithm { get; set; } = "SHA256withRSA";
+    public string Algorithm { get; set; } = "SHA256withRSA";   // thuật toán mặc định khi ký
     public DateTime NotBefore { get; set; } = DateTime.Today;
     public DateTime NotAfter { get; set; } = DateTime.Today.AddYears(3);
     public CertStatus Status { get; set; } = CertStatus.Active;
@@ -38,8 +41,9 @@ public class SignLog : IOrgOwned
     public int CertificateId { get; set; }
     public Certificate? Certificate { get; set; }
     public string DocName { get; set; } = "";
-    public string Hash { get; set; } = "";              // SHA256 hex của nội dung
+    public string Hash { get; set; } = "";              // hex của nội dung (theo thuật toán)
     public string Signature { get; set; } = "";         // base64
+    public string Algorithm { get; set; } = "SHA256withRSA";  // thuật toán đã dùng để ký
     public int ContentLength { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

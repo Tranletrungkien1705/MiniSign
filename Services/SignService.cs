@@ -10,6 +10,9 @@ public record SignResult(bool ok, string msg, string? hash, string? signature, s
 public record VerifyResult(bool valid, string msg, string? subject, string? serial, DateTime? signedAt);
 public record SignDash(int Certs, int Active, int Signs, List<Certificate> RecentCerts, List<SignLog> RecentSigns);
 
+// Thông tin chứng thư công khai (port từ InBrand: endpoint GetCertificateInfo của Signature Server).
+public record CertInfo(string subject, string serial, string algorithm, DateTime notBefore, DateTime notAfter, string status, bool usable);
+
 public interface ISignService
 {
     Task<List<Certificate>> CertsAsync();
@@ -18,7 +21,10 @@ public interface ISignService
     Task<(bool ok, string msg, int id)> CreateCertAsync(string subject, int years);
     Task<(bool ok, string msg)> RevokeAsync(int id);
     Task<SignResult> SignAsync(int certId, string docName, string content);
+    Task<SignResult> SignAsync(int certId, string docName, string content, SignAlgorithm algorithm);
     Task<VerifyResult> VerifyAsync(string serial, string content, string signatureB64);
+    Task<VerifyResult> VerifyAsync(string serial, string content, string signatureB64, SignAlgorithm algorithm);
+    Task<CertInfo?> CertInfoAsync(string serial);
     Task<List<SignLog>> SignLogsAsync(int? certId);
     Task<SignDash> DashboardAsync();
 
@@ -58,6 +64,9 @@ public class SignService(AppDbContext db) : ISignService
     }
 
     public async Task<SignResult> SignAsync(int certId, string docName, string content)
+        => await SignAsync(certId, docName, content, SignAlgorithm.SHA256withRSA);
+
+    public async Task<SignResult> SignAsync(int certId, string docName, string content, SignAlgorithm algorithm)
     {
         var c = await db.Certificates.FirstOrDefaultAsync(x => x.Id == certId);
         if (c == null) return new(false, "Không tìm thấy chứng thư.", null, null, null, null);
@@ -67,16 +76,20 @@ public class SignService(AppDbContext db) : ISignService
         var bytes = Encoding.UTF8.GetBytes(content);
         using var rsa = RSA.Create();
         rsa.ImportFromPem(c.PrivateKeyPem);
-        var sig = rsa.SignData(bytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var sig = rsa.SignData(bytes, HashName(algorithm), RSASignaturePadding.Pkcs1);
         var sigB64 = Convert.ToBase64String(sig);
-        var hashHex = Sha256Hex(content);
+        var hashHex = HashHex(content, algorithm);
+        var algoName = AlgoName(algorithm);
 
-        db.SignLogs.Add(new SignLog { CertificateId = c.Id, DocName = string.IsNullOrWhiteSpace(docName) ? "document" : docName.Trim(), Hash = hashHex, Signature = sigB64, ContentLength = bytes.Length });
+        db.SignLogs.Add(new SignLog { CertificateId = c.Id, DocName = string.IsNullOrWhiteSpace(docName) ? "document" : docName.Trim(), Hash = hashHex, Signature = sigB64, Algorithm = algoName, ContentLength = bytes.Length });
         await db.SaveChangesAsync();
-        return new(true, "Đã ký thành công.", hashHex, sigB64, c.Serial, c.Algorithm);
+        return new(true, "Đã ký thành công.", hashHex, sigB64, c.Serial, algoName);
     }
 
     public async Task<VerifyResult> VerifyAsync(string serial, string content, string signatureB64)
+        => await VerifyAsync(serial, content, signatureB64, SignAlgorithm.SHA256withRSA);
+
+    public async Task<VerifyResult> VerifyAsync(string serial, string content, string signatureB64, SignAlgorithm algorithm)
     {
         var c = await GetBySerialAsync((serial ?? "").Trim());
         if (c == null) return new(false, "Không tìm thấy chứng thư theo serial.", null, null, null);
@@ -86,11 +99,20 @@ public class SignService(AppDbContext db) : ISignService
 
         using var rsa = RSA.Create();
         rsa.ImportFromPem(c.PublicKeyPem);
-        var ok = rsa.VerifyData(Encoding.UTF8.GetBytes(content ?? ""), sig, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        var ok = rsa.VerifyData(Encoding.UTF8.GetBytes(content ?? ""), sig, HashName(algorithm), RSASignaturePadding.Pkcs1);
         DateTime? signedAt = ok ? (await db.SignLogs.IgnoreQueryFilters()
             .Where(l => l.CertificateId == c.Id && l.Signature == signatureB64.Trim())
             .OrderByDescending(l => l.Id).Select(l => (DateTime?)l.CreatedAt).FirstOrDefaultAsync()) : null;
         return new(ok, ok ? "Chữ ký HỢP LỆ — nội dung toàn vẹn." : "Chữ ký KHÔNG hợp lệ — nội dung đã bị thay đổi hoặc sai chữ ký.", c.Subject, c.Serial, signedAt);
+    }
+
+    // Tra cứu thông tin chứng thư công khai theo serial (port từ GetCertificateInfo).
+    public async Task<CertInfo?> CertInfoAsync(string serial)
+    {
+        var c = await GetBySerialAsync((serial ?? "").Trim());
+        if (c == null) return null;
+        var (text, _) = Ui.Cert(c);
+        return new(c.Subject, c.Serial, c.Algorithm, c.NotBefore, c.NotAfter, text, c.IsUsable);
     }
 
     public Task<List<SignLog>> SignLogsAsync(int? certId)
@@ -112,6 +134,20 @@ public class SignService(AppDbContext db) : ISignService
         var h = SHA256.HashData(Encoding.UTF8.GetBytes(content ?? ""));
         return Convert.ToHexString(h).ToLowerInvariant();
     }
+
+    // Băm nội dung theo thuật toán (SHA256 hoặc SHA1 — port từ InBrand signTTHD/SignatureVerify).
+    private static string HashHex(string content, SignAlgorithm algorithm)
+    {
+        var bytes = Encoding.UTF8.GetBytes(content ?? "");
+        var h = algorithm == SignAlgorithm.SHA1withRSA ? SHA1.HashData(bytes) : SHA256.HashData(bytes);
+        return Convert.ToHexString(h).ToLowerInvariant();
+    }
+
+    private static HashAlgorithmName HashName(SignAlgorithm algorithm)
+        => algorithm == SignAlgorithm.SHA1withRSA ? HashAlgorithmName.SHA1 : HashAlgorithmName.SHA256;
+
+    private static string AlgoName(SignAlgorithm algorithm)
+        => algorithm == SignAlgorithm.SHA1withRSA ? "SHA1withRSA" : "SHA256withRSA";
 
     private async Task<string> GenSerialAsync()
     {

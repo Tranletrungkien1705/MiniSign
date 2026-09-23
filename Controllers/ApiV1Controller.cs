@@ -57,11 +57,35 @@ public class ApiV1Controller(ISignService svc, ICache cache, ITenantContext tena
         return res.ok ? Ok(new { ok = true, res.hash, res.signature, res.serial, res.algo }) : BadRequest(new { ok = false, error = res.msg });
     }
 
+    // Ký SHA1withRSA — thuật toán hóa đơn điện tử (port từ InBrand signTTHD).
+    [HttpPost("sign/sha1")]
+    public async Task<IActionResult> SignSha1([FromBody] SignReq r)
+    {
+        var res = await svc.SignAsync(r.CertId, r.DocName ?? "document", r.Content ?? "", SignAlgorithm.SHA1withRSA);
+        return res.ok ? Ok(new { ok = true, res.hash, res.signature, res.serial, res.algo }) : BadRequest(new { ok = false, error = res.msg });
+    }
+
     [HttpPost("verify")]
     public async Task<IActionResult> Verify([FromBody] VerifyReq r)
     {
         var res = await svc.VerifyAsync(r.Serial ?? "", r.Content ?? "", r.Signature ?? "");
         return Ok(new { res.valid, res.msg, res.subject, res.serial, res.signedAt });
+    }
+
+    // Xác thực SHA1withRSA (port từ InBrand SignatureVerify).
+    [HttpPost("verify/sha1")]
+    public async Task<IActionResult> VerifySha1([FromBody] VerifyReq r)
+    {
+        var res = await svc.VerifyAsync(r.Serial ?? "", r.Content ?? "", r.Signature ?? "", SignAlgorithm.SHA1withRSA);
+        return Ok(new { res.valid, res.msg, res.subject, res.serial, res.signedAt });
+    }
+
+    // Tra cứu thông tin chứng thư công khai theo serial (port từ GetCertificateInfo).
+    [HttpGet("certinfo/{serial}")]
+    public async Task<IActionResult> CertInfo(string serial)
+    {
+        var info = await svc.CertInfoAsync(serial);
+        return info == null ? NotFound(new { error = "Không tìm thấy chứng thư." }) : Ok(info);
     }
 
     [HttpGet("signlogs")]
