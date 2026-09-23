@@ -79,6 +79,20 @@ public static class Seeder
             });
             await db.SaveChangesAsync();
         }
+
+        // Dòng chi tiết hóa đơn (port từ InBrand Invoice_InvoiceDtl) — dùng để đối chiếu tổng tiền.
+        if (!await db.InvoiceLines.AnyAsync())
+        {
+            var inv = await db.Invoices.FirstOrDefaultAsync();
+            if (inv != null)
+            {
+                // 2 dòng: 1 chịu VAT 10%, 1 chịu VAT 5% → tổng khớp TotalValPmt đã seed.
+                db.InvoiceLines.AddRange(
+                    new InvoiceLine { InvoiceId = inv.Id, Idx = 1, SpecCode = "SP001", SpecName = "Hàng hóa A", Qty = 1, UnitPrice = 500_000_000m, VATRate = 10m, ValInvoice = 500_000_000m, ValTax = 50_000_000m },
+                    new InvoiceLine { InvoiceId = inv.Id, Idx = 2, SpecCode = "SP002", SpecName = "Hàng hóa B", Qty = 1, UnitPrice = 0m, VATRate = 0m, ValInvoice = 0m, ValTax = 0m });
+                await db.SaveChangesAsync();
+            }
+        }
     }
 
     private static async Task MigratePostgresAsync(AppDbContext db)
@@ -143,6 +157,9 @@ public static class Seeder
         // Hạn mức cấp số theo MST (port từ InBrand Invoice_license).
         sql.Add("CREATE TABLE IF NOT EXISTS minisign.\"InvoiceLicenses\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"MST\" text NOT NULL DEFAULT '', \"NetworkID\" text NOT NULL DEFAULT '', \"TotalQty\" bigint NOT NULL DEFAULT 0, \"TotalQtyIssued\" bigint NOT NULL DEFAULT 0, \"TotalQtyUsed\" bigint NOT NULL DEFAULT 0, \"FlagActive\" boolean NOT NULL DEFAULT true, \"LogLUBy\" text NULL, \"LogLUDTimeUTC\" timestamp NULL, \"CreatedAt\" timestamp NOT NULL DEFAULT now())");
         sql.Add("CREATE UNIQUE INDEX IF NOT EXISTS \"IX_InvoiceLicenses_OrgId_MST\" ON minisign.\"InvoiceLicenses\" (\"OrgId\", \"MST\")");
+        // Dòng chi tiết hóa đơn (port từ InBrand Invoice_InvoiceDtl) — dùng để đối chiếu tổng tiền.
+        sql.Add("CREATE TABLE IF NOT EXISTS minisign.\"InvoiceLines\" (\"Id\" serial PRIMARY KEY, \"OrgId\" uuid NOT NULL, \"InvoiceId\" integer NOT NULL, \"Idx\" integer NOT NULL DEFAULT 0, \"SpecCode\" text NOT NULL DEFAULT '', \"SpecName\" text NOT NULL DEFAULT '', \"Qty\" numeric NOT NULL DEFAULT 0, \"UnitPrice\" numeric NOT NULL DEFAULT 0, \"VATRate\" numeric NOT NULL DEFAULT 0, \"ValInvoice\" numeric NOT NULL DEFAULT 0, \"ValTax\" numeric NOT NULL DEFAULT 0, \"CreatedAt\" timestamp NOT NULL DEFAULT now())");
+        sql.Add("CREATE INDEX IF NOT EXISTS \"IX_InvoiceLines_OrgId_InvoiceId\" ON minisign.\"InvoiceLines\" (\"OrgId\", \"InvoiceId\")");
         foreach (var s in sql) try { await db.Database.ExecuteSqlRawAsync(s); } catch { }
     }
 }

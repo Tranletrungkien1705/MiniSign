@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<Certificate> Certificates => Set<Certificate>();
     public DbSet<SignLog> SignLogs => Set<SignLog>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<InvoiceTemplate> InvoiceTemplates => Set<InvoiceTemplate>();
     public DbSet<InvoiceLicense> InvoiceLicenses => Set<InvoiceLicense>();
 
@@ -34,6 +35,12 @@ public class AppDbContext : DbContext
         b.Entity<Invoice>(e =>
         {
             e.HasIndex(x => new { x.OrgId, x.InvoiceCode }).IsUnique();
+            e.HasQueryFilter(x => x.OrgId == _orgId);
+        });
+        b.Entity<InvoiceLine>(e =>
+        {
+            e.HasIndex(x => new { x.OrgId, x.InvoiceId });
+            e.HasOne(x => x.Invoice).WithMany().HasForeignKey(x => x.InvoiceId);
             e.HasQueryFilter(x => x.OrgId == _orgId);
         });
         b.Entity<InvoiceTemplate>(e =>

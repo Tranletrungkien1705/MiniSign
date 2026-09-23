@@ -59,9 +59,23 @@ public interface IInvoiceService
     Task<InvoiceResult> ChangeAsync(int id, string reason, string changeBy);
     Task<InvoiceResult> AdjustAsync(int id, string refNo, SourceInvoiceCode source, InvoiceAdjType adjType, string reason, string adjustBy);
     Task<InvoiceResult> UpdateAfterAllocatedAsync(int id, InvoiceUpdateReq req);
+    Task<List<InvoiceLine>> LinesAsync(int invoiceId);
+    Task<InvoiceResult> AddLineAsync(int invoiceId, InvoiceLineReq req);
+    Task<InvoiceTotalCheck> CheckTotalAsync(int invoiceId, VatType vatType);
     Task<InvoiceDash> DashboardAsync();
     Task<InvoiceLifecycleDash> LifecycleDashboardAsync();
 }
+
+// Dữ liệu một dòng chi tiết hóa đơn (port từ InBrand Invoice_InvoiceDtl).
+public record InvoiceLineReq(
+    int Idx,
+    string? SpecCode,
+    string? SpecName,
+    decimal Qty,
+    decimal UnitPrice,
+    decimal VATRate,
+    decimal ValInvoice,
+    decimal ValTax);
 
 public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceService
 {
@@ -448,6 +462,86 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return new(true, "Đã cập nhật hóa đơn sau khi cấp số.", inv);
+    }
+
+    // Danh sách dòng chi tiết của một hóa đơn (port từ InBrand Invoice_InvoiceDtl).
+    public Task<List<InvoiceLine>> LinesAsync(int invoiceId) =>
+        db.InvoiceLines.Where(l => l.InvoiceId == invoiceId).OrderBy(l => l.Idx).ToListAsync();
+
+    // Thêm một dòng chi tiết hóa đơn (port từ InBrand Invoice_InvoiceDtl).
+    public async Task<InvoiceResult> AddLineAsync(int invoiceId, InvoiceLineReq req)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+        if (req.Qty < 0) return new(false, "Số lượng (Qty) phải >= 0.", inv);
+        if (req.UnitPrice < 0) return new(false, "Đơn giá (UnitPrice) phải >= 0.", inv);
+        if (req.VATRate < 0) return new(false, "Thuế suất (VATRate) phải >= 0.", inv);
+
+        var line = new InvoiceLine
+        {
+            InvoiceId = inv.Id,
+            Idx = req.Idx,
+            SpecCode = (req.SpecCode ?? "").Trim(),
+            SpecName = (req.SpecName ?? "").Trim(),
+            Qty = req.Qty,
+            UnitPrice = req.UnitPrice,
+            VATRate = req.VATRate,
+            ValInvoice = req.ValInvoice,
+            ValTax = req.ValTax
+        };
+        db.InvoiceLines.Add(line);
+        await db.SaveChangesAsync();
+        return new(true, "Đã thêm dòng chi tiết hóa đơn.", inv);
+    }
+
+    // KIỂM TRA/ĐỐI CHIẾU TỔNG TIỀN HÓA ĐƠN (port từ InBrand
+    // myCheck_Invoice_Invoice_Total_New20190905 + myCheck_Invoice_InvoiceDtl_Total_New20190905).
+    // Quy tắc InBrand:
+    //  - Tính lại từ dòng chi tiết: TotalValInvoice = Σ(Qty × UnitPrice);
+    //    TotalValVAT = Σ(Qty × UnitPrice × VATRate/100); TotalValPmt = TotalValInvoice + TotalValVAT.
+    //  - VatType = NoVat ("NVAT"): LÀM TRÒN từng dòng rồi mới cộng; SingleVat ("1VAT"): cộng rồi mới làm tròn.
+    //  - Dung sai Delta = max(TổngThanhToán / 1.000.000, 10).
+    //  - ok = true khi mọi chênh lệch |khai báo − tính lại| <= Delta
+    //    (lỗi myCheck_Invoice_Invoice_Total_InvalidValue khi vượt dung sai).
+    public async Task<InvoiceTotalCheck> CheckTotalAsync(int invoiceId, VatType vatType)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == invoiceId);
+        if (inv == null)
+            return new(false, "Không tìm thấy hóa đơn.", vatType, 0, 0, 0, 0);
+
+        var lines = await db.InvoiceLines.Where(l => l.InvoiceId == invoiceId).ToListAsync();
+
+        decimal calcInvoice, calcVat;
+        if (vatType == VatType.NoVat)
+        {
+            // "NVAT": làm tròn TỪNG dòng rồi mới cộng.
+            calcInvoice = lines.Sum(l => Math.Round(l.Qty * l.UnitPrice, 0, MidpointRounding.AwayFromZero));
+            calcVat = lines.Sum(l => Math.Round(l.Qty * l.UnitPrice * l.VATRate / 100m, 0, MidpointRounding.AwayFromZero));
+        }
+        else
+        {
+            // "1VAT": cộng trước rồi mới làm tròn theo tổng.
+            calcInvoice = Math.Round(lines.Sum(l => l.Qty * l.UnitPrice), 0, MidpointRounding.AwayFromZero);
+            calcVat = Math.Round(lines.Sum(l => l.Qty * l.UnitPrice * l.VATRate / 100m), 0, MidpointRounding.AwayFromZero);
+        }
+        var calcPmt = calcInvoice + calcVat;
+
+        var inputInvoice = inv.TotalValInvoice;
+        var inputVat = inv.TotalValVAT;
+        var inputPmt = inv.TotalValPmt;
+
+        // Dung sai: max(TổngThanhToán / 1.000.000, 10) — port từ InBrand.
+        var delta = Math.Max(inputPmt / 1_000_000m, 10m);
+
+        var ok = Math.Abs(inputInvoice - calcInvoice) <= delta
+              && Math.Abs(inputVat - calcVat) <= delta
+              && Math.Abs(inputPmt - calcPmt) <= delta;
+
+        var msg = ok
+            ? $"Tổng tiền khớp (dung sai {delta:N0})."
+            : $"Tổng tiền KHÔNG khớp: khai báo {inputPmt:N0} vs tính lại {calcPmt:N0} (dung sai {delta:N0}).";
+
+        return new(ok, msg, vatType, calcInvoice, calcVat, calcPmt, inputInvoice, inputVat, inputPmt, delta, lines.Count);
     }
 
     private static string? Trim(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

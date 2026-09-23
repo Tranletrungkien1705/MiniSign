@@ -30,6 +30,12 @@ public enum SourceInvoiceCode { Root = 0, Replace = 1, Adj = 2 }
 //  - AdjDecrease: điều chỉnh GIẢM (ADJDESCREASE) — bắt buộc có RefNo.
 public enum InvoiceAdjType { Normal = 0, AdjIncrease = 1, AdjDecrease = 2 }
 
+// Kiểu thuế GTGT của mẫu số hóa đơn (port từ InBrand Invoice_TempGroup.VATType).
+// Quyết định cách LÀM TRÒN khi tính tổng tiền hóa đơn (myCheck_Invoice_Invoice_Total_New20190905):
+//  - SingleVat ("1VAT"): một thuế suất — CỘNG trước rồi MỚI làm tròn theo tổng.
+//  - NoVat ("NVAT"): nhiều thuế suất — LÀM TRÒN từng dòng rồi mới cộng.
+public enum VatType { SingleVat = 0, NoVat = 1 }
+
 public class Org
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -167,6 +173,28 @@ public class Invoice : IOrgOwned
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
+// Dòng chi tiết hóa đơn (port từ InBrand Invoice_InvoiceDtl).
+// Mỗi dòng có số lượng (Qty), đơn giá (UnitPrice), thuế suất (VATRate %) và
+// giá trị/thuế do người dùng khai báo (ValInvoice/ValTax).
+// Dùng để TÍNH LẠI tổng tiền hóa đơn và ĐỐI CHIẾU với tổng đã khai báo
+// (myCheck_Invoice_InvoiceDtl_Total_New20190905).
+public class InvoiceLine : IOrgOwned
+{
+    public int Id { get; set; }
+    public Guid OrgId { get; set; }
+    public int InvoiceId { get; set; }
+    public Invoice? Invoice { get; set; }
+    public int Idx { get; set; }                          // Thứ tự dòng (port từ Invoice_InvoiceDtl.Idx)
+    public string SpecCode { get; set; } = "";            // Mã hàng hóa/dịch vụ (port từ Invoice_InvoiceDtl.SpecCode)
+    public string SpecName { get; set; } = "";            // Tên hàng hóa/dịch vụ (port từ Invoice_InvoiceDtl.SpecName)
+    public decimal Qty { get; set; }                      // Số lượng (port từ Invoice_InvoiceDtl.Qty)
+    public decimal UnitPrice { get; set; }                // Đơn giá (port từ Invoice_InvoiceDtl.UnitPrice)
+    public decimal VATRate { get; set; }                  // Thuế suất % (port từ Invoice_InvoiceDtl.VATRate)
+    public decimal ValInvoice { get; set; }               // Giá trị khai báo (port từ Invoice_InvoiceDtl.ValInvoice)
+    public decimal ValTax { get; set; }                   // Tiền thuế khai báo (port từ Invoice_InvoiceDtl.ValTax)
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 // Mẫu số hóa đơn (Invoice_TempInvoice) — dải số được cấp phát cho một MST.
 // Port từ InBrand Invoice_TempInvoice: StartInvoiceNo/EndInvoiceNo/QtyUsed/LastInvoiceNo/LastInvoiceDateUTC/EffDateStart.
 // Quy tắc cấp số (Invoice_Invoice_AllocatedInvX_New20190917):
@@ -232,3 +260,24 @@ public record CertValidation(
     string? algorithm,
     DateTime? notBefore,
     DateTime? notAfter);
+
+// Kết quả KIỂM TRA/ĐỐI CHIẾU TỔNG TIỀN HÓA ĐƠN (port từ InBrand
+// myCheck_Invoice_Invoice_Total_New20190905 + myCheck_Invoice_InvoiceDtl_Total_New20190905).
+// Tính lại tổng từ các dòng chi tiết rồi so với tổng đã khai báo trên hóa đơn.
+//  - TotalValInvoice = Σ(Qty × UnitPrice); TotalValVAT = Σ(Qty × UnitPrice × VATRate/100).
+//  - TotalValPmt = TotalValInvoice + TotalValVAT.
+//  - VatType = NoVat ("NVAT"): làm tròn TỪNG dòng rồi mới cộng; SingleVat ("1VAT"): cộng rồi mới làm tròn.
+//  - Delta: dung sai cho phép = max(TổngThanhToán / 1.000.000, 10).
+//  - ok = true khi mọi chênh lệch (|khai báo − tính lại|) đều <= Delta.
+public record InvoiceTotalCheck(
+    bool ok,                 // tổng khai báo khớp tổng tính lại (trong dung sai)
+    string message,          // thông điệp kết luận
+    VatType vatType,         // kiểu thuế của mẫu số (quyết định cách làm tròn)
+    decimal calcTotalValInvoice,   // tổng giá trị hàng hóa tính lại từ dòng chi tiết
+    decimal calcTotalValVAT,       // tổng tiền thuế GTGT tính lại
+    decimal calcTotalValPmt,       // tổng thanh toán tính lại = giá trị + thuế
+    decimal inputTotalValInvoice,  // tổng giá trị hàng hóa đã khai báo trên hóa đơn
+    decimal inputTotalValVAT,      // tổng tiền thuế GTGT đã khai báo
+    decimal inputTotalValPmt,      // tổng thanh toán đã khai báo
+    decimal delta,                 // dung sai cho phép
+    int lineCount);                // số dòng chi tiết đã dùng để tính
