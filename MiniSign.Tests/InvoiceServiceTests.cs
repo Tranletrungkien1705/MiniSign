@@ -736,4 +736,78 @@ public class InvoiceServiceTests
             Assert.False(r.ok);   // đã đẩy cổng → không đẩy lại (ExistFlagPushOutSite)
         }
     }
+
+    // CẤP SỐ + DUYỆT + PHÁT HÀNH trong MỘT bước (port từ InBrand
+    // Invoice_Invoice_AllocatedAndApprovedAndIssued): chạy tuần tự Allocate → Approve → Issue.
+    [Fact]
+    public async Task AllocateApproveIssue_Pending_BecomesIssued()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "0101234567", "Cty ABC", "Nội dung", 1000m);
+            var r = await inv.AllocateApproveIssueAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "ketoan01");
+            Assert.True(r.ok);
+            Assert.Equal(InvoiceStatus.Issued, r.invoice!.Status);   // đi thẳng tới ISSUED
+            Assert.Equal("0000001", r.invoice.InvoiceNo);   // đã cấp số (D7)
+            Assert.Equal("ketoan01", r.invoice.InvoiceNoBy);
+            Assert.Equal("ketoan01", r.invoice.ApprBy);             // đã duyệt
+            Assert.Equal("ketoan01", r.invoice.IssuedBy);           // đã phát hành
+            Assert.NotNull(r.invoice.InvoiceNoDTimeUTC);
+            Assert.NotNull(r.invoice.ApprDTimeUTC);
+            Assert.NotNull(r.invoice.IssuedDTimeUTC);
+        }
+    }
+
+    [Fact]
+    public async Task AllocateApproveIssue_IncrementsTemplateQtyUsed()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var tpl = await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            await inv.AllocateApproveIssueAsync(c.invoice!.Id, "1C26TAA", DateTime.Today, "u1");
+            var t = await db.InvoiceTemplates.FirstAsync(x => x.Id == tpl.Id);
+            Assert.Equal(1, t.QtyUsed);
+            Assert.Equal("0000001", t.LastInvoiceNo);
+        }
+    }
+
+    [Fact]
+    public async Task AllocateApproveIssue_AlreadyIssued_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var issued = await SeedIssued(inv);   // HD-001 đã ISSUED
+            var r = await inv.AllocateApproveIssueAsync(issued.Id, "1C26TAA", DateTime.Today, "u1");
+            Assert.False(r.ok);   // không ở PENDING → từ chối
+        }
+    }
+
+    [Fact]
+    public async Task AllocateApproveIssue_UnknownTemplate_Rejected()
+    {
+        var (_, inv, _, conn) = NewSvc(); using (conn)
+        {
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.AllocateApproveIssueAsync(c.invoice!.Id, "KHONG-CO", DateTime.Today, "u1");
+            Assert.False(r.ok);
+            Assert.Equal(InvoiceStatus.Pending, r.invoice!.Status);   // không đổi trạng thái khi lỗi
+            Assert.Null(r.invoice.InvoiceNo);
+        }
+    }
+
+    [Fact]
+    public async Task AllocateApproveIssue_FutureDate_Rejected()
+    {
+        var (db, inv, _, conn) = NewSvc(); using (conn)
+        {
+            await SeedTemplate(db);
+            var c = await inv.CreateAsync("HD-001", "", "", "Nội dung", 0m);
+            var r = await inv.AllocateApproveIssueAsync(c.invoice!.Id, "1C26TAA", DateTime.Today.AddDays(1), "u1");
+            Assert.False(r.ok);   // ngày hóa đơn ở tương lai
+            Assert.Equal(InvoiceStatus.Pending, r.invoice!.Status);
+        }
+    }
 }

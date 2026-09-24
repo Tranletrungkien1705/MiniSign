@@ -143,6 +143,16 @@ public class ApiV1Controller(ISignService svc, IInvoiceService invoices, ILicens
         return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
     }
 
+    // CẤP SỐ + DUYỆT + PHÁT HÀNH trong MỘT bước (port từ InBrand
+    // Invoice_Invoice_AllocatedAndApprovedAndIssued). Chạy tuần tự Allocate → Approve → Issue
+    // trong cùng một transaction; lỗi bất kỳ bước nào thì không lưu (rollback).
+    [HttpPost("invoices/{id:int}/allocate-approve-issue")]
+    public async Task<IActionResult> AllocateApproveIssue(int id, [FromBody] InvoiceAllocateApproveIssueReq r)
+    {
+        var res = await invoices.AllocateApproveIssueAsync(id, r.TInvoiceCode ?? "", r.InvoiceDateUTC ?? default, r.By ?? "");
+        return res.ok ? Ok(InvDto(res.invoice!)) : BadRequest(new { error = res.msg, invoice = res.invoice == null ? null : InvDto(res.invoice) });
+    }
+
     // Danh sách mẫu số hóa đơn (dải số được cấp phát).
     [HttpGet("invoices/templates")]
     public async Task<IActionResult> InvoiceTemplates()
@@ -327,6 +337,7 @@ public class InvoiceChangeReq { public string? Reason { get; set; } public strin
 public class InvoiceAdjustReq { public string? RefNo { get; set; } public int SourceInvoiceCode { get; set; } public int InvoiceAdjType { get; set; } public string? Reason { get; set; } public string? AdjustBy { get; set; } }
 public class InvoiceApproveReq { public string? InvoiceNo { get; set; } public string? ApprBy { get; set; } }
 public class InvoiceAllocateReq { public string? TInvoiceCode { get; set; } public DateTime? InvoiceDateUTC { get; set; } public string? AllocateBy { get; set; } }
+public class InvoiceAllocateApproveIssueReq { public string? TInvoiceCode { get; set; } public DateTime? InvoiceDateUTC { get; set; } public string? By { get; set; } }
 public class InvoiceIssueReq { public string? IssuedBy { get; set; } }
 public class InvoiceMailSentReq { public string? SendBy { get; set; } }
 public class InvoicePushOutSiteReq { public string? PushBy { get; set; } }

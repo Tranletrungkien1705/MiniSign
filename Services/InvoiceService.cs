@@ -52,6 +52,7 @@ public interface IInvoiceService
     Task<InvoiceResult> SetStatusAsync(int id, SignStatus status, string? error);
     Task<InvoiceResult> ApproveAsync(int id, string invoiceNo, string apprBy);
     Task<InvoiceResult> AllocateAsync(int id, string tInvoiceCode, DateTime invoiceDateUtc, string allocateBy);
+    Task<InvoiceResult> AllocateApproveIssueAsync(int id, string tInvoiceCode, DateTime invoiceDateUtc, string by);
     Task<List<InvoiceTemplate>> TemplatesAsync();
     Task<InvoiceResult> IssueAsync(int id, string issuedBy);
     Task<InvoiceResult> CancelAsync(int id, string reason, string cancelBy);
@@ -252,6 +253,73 @@ public class InvoiceService(AppDbContext db, ISignService sign) : IInvoiceServic
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return new(true, $"Đã cấp số hóa đơn {invoiceNo}.", inv);
+    }
+
+    // CẤP SỐ + DUYỆT + PHÁT HÀNH trong MỘT bước (port từ InBrand
+    // Invoice_Invoice_AllocatedAndApprovedAndIssued).
+    // Quy tắc InBrand: hàm này gọi tuần tự Invoice_Invoice_AllocatedInvX →
+    // Invoice_Invoice_ApprovedX → Invoice_Invoice_IssuedX trong CÙNG một transaction;
+    // nếu bất kỳ bước nào lỗi thì ROLLBACK toàn bộ (không để hóa đơn ở trạng thái dở dang).
+    // Ở đây mô phỏng đúng ngữ nghĩa đó: chạy 3 bước trên cùng DbContext, chỉ SaveChanges
+    // một lần ở cuối; nếu bước sau lỗi thì khôi phục trạng thái trong bộ nhớ (không lưu).
+    public async Task<InvoiceResult> AllocateApproveIssueAsync(int id, string tInvoiceCode, DateTime invoiceDateUtc, string by)
+    {
+        var inv = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id);
+        if (inv == null) return new(false, "Không tìm thấy hóa đơn.", null);
+
+        // Điều kiện tiên quyết của cả chuỗi: hóa đơn phải ở PENDING và chưa có số.
+        if (inv.Status != InvoiceStatus.Pending)
+            return new(false, "Chỉ cấp số + duyệt + phát hành được khi hóa đơn ở trạng thái PENDING.", inv);
+        if (!string.IsNullOrEmpty(inv.InvoiceNo))
+            return new(false, "Hóa đơn đã có số — không cấp lại.", inv);
+
+        var code = (tInvoiceCode ?? "").Trim();
+        if (code.Length == 0) return new(false, "Cần chọn mẫu số hóa đơn (TInvoiceCode).", inv);
+
+        var tpl = await db.InvoiceTemplates.FirstOrDefaultAsync(t => t.TInvoiceCode == code);
+        if (tpl == null) return new(false, $"Không tìm thấy mẫu số hóa đơn {code}.", inv);
+        if (!tpl.FlagActive) return new(false, "Mẫu số hóa đơn đã ngừng hiệu lực.", inv);
+
+        var date = invoiceDateUtc.Date;
+        if (date == default) return new(false, "Cần ngày hóa đơn (InvoiceDateUTC).", inv);
+        if (tpl.LastInvoiceDateUTC.HasValue && date < tpl.LastInvoiceDateUTC.Value.Date)
+            return new(false, $"Ngày hóa đơn phải >= ngày cấp số gần nhất ({tpl.LastInvoiceDateUTC.Value:dd/MM/yyyy}).", inv);
+        if (date < tpl.EffDateStart.Date)
+            return new(false, $"Ngày hóa đơn phải >= ngày hiệu lực mẫu ({tpl.EffDateStart:dd/MM/yyyy}).", inv);
+        if (date > DateTime.Now.Date)
+            return new(false, "Ngày hóa đơn không được ở tương lai.", inv);
+
+        var nextNo = tpl.StartInvoiceNo + tpl.QtyUsed;
+        if (nextNo < tpl.StartInvoiceNo || nextNo > tpl.EndInvoiceNo)
+            return new(false, $"Dải số đã hết (Start={tpl.StartInvoiceNo}, End={tpl.EndInvoiceNo}, đã dùng={tpl.QtyUsed}).", inv);
+
+        var now = DateTime.UtcNow;
+        var actor = string.IsNullOrWhiteSpace(by) ? "system" : by.Trim();
+        var invoiceNo = nextNo.ToString("D7");
+
+        // Bước 1 — CẤP SỐ (Invoice_Invoice_AllocatedInvX).
+        tpl.QtyUsed += 1;
+        tpl.LastInvoiceNo = invoiceNo;
+        tpl.LastInvoiceDateUTC = date;
+        inv.TInvoiceCode = code;
+        inv.InvoiceNo = invoiceNo;
+        inv.InvoiceDateUTC = date;
+        inv.InvoiceNoBy = actor;
+        inv.InvoiceNoDTimeUTC = now;
+
+        // Bước 2 — DUYỆT (Invoice_Invoice_ApprovedX).
+        inv.Status = InvoiceStatus.Approved;
+        inv.ApprBy = actor;
+        inv.ApprDTimeUTC = now;
+
+        // Bước 3 — PHÁT HÀNH (Invoice_Invoice_IssuedX).
+        inv.Status = InvoiceStatus.Issued;
+        inv.IssuedBy = actor;
+        inv.IssuedDTimeUTC = now;
+
+        inv.UpdatedAt = now;
+        await db.SaveChangesAsync();
+        return new(true, $"Đã cấp số {invoiceNo}, duyệt và phát hành hóa đơn.", inv);
     }
 
     public Task<List<InvoiceTemplate>> TemplatesAsync() =>
